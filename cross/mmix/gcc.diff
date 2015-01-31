@@ -1,0 +1,165 @@
+diff -rcN src/gcc-org/config.sub src/gcc/config.sub
+*** src/gcc-org/config.sub	2013-01-11 14:02:58.000000000 +0100
+--- src/gcc/config.sub	2013-12-01 18:20:13.482398717 +0100
+***************
+*** 1358,1364 ****
+  	      | -hpux* | -unos* | -osf* | -luna* | -dgux* | -auroraux* | -solaris* \
+  	      | -sym* | -kopensolaris* | -plan9* \
+  	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
+! 	      | -aos* | -aros* \
+  	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
+  	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
+  	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \
+--- 1358,1364 ----
+  	      | -hpux* | -unos* | -osf* | -luna* | -dgux* | -auroraux* | -solaris* \
+  	      | -sym* | -kopensolaris* | -plan9* \
+  	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
+! 	      | -aos* | -aros* | -askatu* \
+  	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
+  	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
+  	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \
+diff -rcN src/gcc-org/gcc/config/askatu.h src/gcc/gcc/config/askatu.h
+*** src/gcc-org/gcc/config/askatu.h	1970-01-01 01:00:00.000000000 +0100
+--- src/gcc/gcc/config/askatu.h	2013-12-01 18:20:42.166398488 +0100
+***************
+*** 0 ****
+--- 1,33 ----
++   #undef   STARTFILE_SPEC
++   #define STARTFILE_SPEC "%{shared|pie:crt0S.o%s;:crt0.o%s} %{shared:crt1S.o%s;:crt1.o%s} %{shared|pie:crtbeginS.o%s;:crtbegin.o%s}"
++   
++   #undef   ENDFILE_SPEC
++   #define ENDFILE_SPEC "%{shared|pie:crtendS.o%s;:crtend.o%s} %{shared:crtnS.o%s;:crtn.o%s}"
++   
++   #undef LINK_SPEC
++   #define LINK_SPEC ""
++   
++   #undef TARGET_OS_CPP_BUILTINS
++   #define TARGET_OS_CPP_BUILTINS()      \
++     do {                                \
++       /* to force a strcmp for typeinfo-compares */ \
++       builtin_define ("__GXX_MERGED_TYPEINFO_NAMES=0"); \
++       builtin_define ("__GXX_TYPEINFO_EQUALITY_INLINE=0"); \
++       builtin_define ("__mmix__");				\
++       builtin_define ("__MMIX__");				\
++       builtin_define_std ("askatu");      \
++       builtin_define_std ("unix");      \
++       builtin_assert ("system=askatu");   \
++       builtin_assert ("system=unix");   \
++     } while(0);
++   
++   #undef LINK_GCC_C_SEQUENCE_SPEC
++   #define LINK_GCC_C_SEQUENCE_SPEC \
++     "%{static:--start-group} %G %L %{static:--end-group}%{!static:%G}"
++   
++   /* Use --as-needed -lgcc_s for eh support.  */
++   #ifdef HAVE_LD_AS_NEEDED
++   #define USE_LD_AS_NEEDED 1
++   #endif
++ 
++   #define NO_IMPLICIT_EXTERN_C
+diff -rcN src/gcc-org/gcc/config.gcc src/gcc/gcc/config.gcc
+*** src/gcc-org/gcc/config.gcc	2013-10-03 02:47:24.000000000 +0200
+--- src/gcc/gcc/config.gcc	2013-12-01 18:21:10.414398263 +0100
+***************
+*** 1955,1960 ****
+--- 1955,1966 ----
+  	need_64bit_hwint=yes
+  	use_gcc_stdint=wrap
+  	;;
++ mmix-*-askatu)
++ 	tm_file="${tm_file} askatu.h"
++ 	need_64bit_hwint=yes
++ 	use_gcc_stdint=wrap
++ 	default_use_cxa_atexit=yes
++ 	;;
+  mn10300-*-*)
+  	tm_file="dbxelf.h elfos.h newlib-stdint.h ${tm_file}"
+  	if test x$stabs = xyes
+diff -rcN src/gcc-org/libgcc/config.host src/gcc/libgcc/config.host
+*** src/gcc-org/libgcc/config.host	2013-07-09 23:35:57.000000000 +0200
+--- src/gcc/libgcc/config.host	2013-12-01 18:22:12.794397766 +0100
+***************
+*** 785,790 ****
+--- 785,794 ----
+  	extra_parts="crti.o crtn.o crtbegin.o crtend.o"
+  	tmake_file="${tmake_file} ${cpu_type}/t-${cpu_type}"
+  	;;
++ mmix-*-askatu)
++ 	extra_parts="crti.o crtn.o crtbegin.o crtend.o"
++ 	tmake_file="${tmake_file} ${cpu_type}/t-${cpu_type}"
++ 	;;
+  mn10300-*-*)
+  	tmake_file=t-fdpbit
+  	;;
+diff -rcN src/gcc-org/libstdc++-v3/libsupc++/eh_term_handler.cc src/gcc/libstdc++-v3/libsupc++/eh_term_handler.cc
+*** src/gcc-org/libstdc++-v3/libsupc++/eh_term_handler.cc	2013-02-03 18:54:05.000000000 +0100
+--- src/gcc/libstdc++-v3/libsupc++/eh_term_handler.cc	2013-12-01 18:22:37.014397573 +0100
+***************
+*** 32,38 ****
+     --disable-libstdcxx-verbose and rebuilding the library.
+     In a freestanding environment, we default to this latter approach.  */
+  
+! #if _GLIBCXX_HOSTED && _GLIBCXX_VERBOSE
+  /* The current installed user handler.  */
+  std::terminate_handler __cxxabiv1::__terminate_handler =
+  	__gnu_cxx::__verbose_terminate_handler;
+--- 32,38 ----
+     --disable-libstdcxx-verbose and rebuilding the library.
+     In a freestanding environment, we default to this latter approach.  */
+  
+! #if 1 // _GLIBCXX_HOSTED && _GLIBCXX_VERBOSE
+  /* The current installed user handler.  */
+  std::terminate_handler __cxxabiv1::__terminate_handler =
+  	__gnu_cxx::__verbose_terminate_handler;
+diff -rcN src/gcc-org/libstdc++-v3/libsupc++/vterminate.cc src/gcc/libstdc++-v3/libsupc++/vterminate.cc
+*** src/gcc-org/libstdc++-v3/libsupc++/vterminate.cc	2013-02-03 18:54:05.000000000 +0100
+--- src/gcc/libstdc++-v3/libsupc++/vterminate.cc	2013-12-01 18:23:01.426397379 +0100
+***************
+*** 24,35 ****
+  
+  #include <bits/c++config.h>
+  
+! #if _GLIBCXX_HOSTED
+  #include <cstdlib>
+  #include <exception>
+  #include <bits/exception_defines.h>
+  #include <cxxabi.h>
+! # include <cstdio>
+  
+  using namespace std;
+  using namespace abi;
+--- 24,40 ----
+  
+  #include <bits/c++config.h>
+  
+! #if 1 // _GLIBCXX_HOSTED
+  #include <cstdlib>
+  #include <exception>
+  #include <bits/exception_defines.h>
+  #include <cxxabi.h>
+! // don't include cstdio here because thats too much trouble
+! //# include <cstdio>
+! extern "C" void abort(void);
+! extern "C" int fputs(const char*,void*);
+! extern "C" void *free(void*);
+! extern void *stderr;
+  
+  using namespace std;
+  using namespace abi;
+***************
+*** 62,68 ****
+  	  int status = -1;
+  	  char *dem = 0;
+  	  
+! 	  dem = __cxa_demangle(name, 0, 0, &status);
+  
+  	  fputs("terminate called after throwing an instance of '", stderr);
+  	  if (status == 0)
+--- 67,73 ----
+  	  int status = -1;
+  	  char *dem = 0;
+  	  
+! 	  //dem = __cxa_demangle(name, 0, 0, &status);
+  
+  	  fputs("terminate called after throwing an instance of '", stderr);
+  	  if (status == 0)

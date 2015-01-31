@@ -1,0 +1,375 @@
+diff -rcN src/binutils-org/bfd/doc/bfd.texinfo src/binutils/bfd/doc/bfd.texinfo
+*** src/binutils-org/bfd/doc/bfd.texinfo	2010-10-28 13:40:25.000000000 +0200
+--- src/binutils/bfd/doc/bfd.texinfo	2013-12-01 18:15:29.746400977 +0100
+***************
+*** 322,328 ****
+  @printindex cp
+  
+  @tex
+! % I think something like @colophon should be in texinfo.  In the
+  % meantime:
+  \long\def\colophon{\hbox to0pt{}\vfill
+  \centerline{The body of this manual is set in}
+--- 322,328 ----
+  @printindex cp
+  
+  @tex
+! % I think something like @@colophon should be in texinfo.  In the
+  % meantime:
+  \long\def\colophon{\hbox to0pt{}\vfill
+  \centerline{The body of this manual is set in}
+***************
+*** 333,339 ****
+  \centerline{{\sl\fontname\tensl\/}}
+  \centerline{are used for emphasis.}\vfill}
+  \page\colophon
+! % Blame: doc@cygnus.com, 28mar91.
+  @end tex
+  
+  @bye
+--- 333,339 ----
+  \centerline{{\sl\fontname\tensl\/}}
+  \centerline{are used for emphasis.}\vfill}
+  \page\colophon
+! % Blame: doc@@cygnus.com, 28mar91.
+  @end tex
+  
+  @bye
+diff -rcN src/binutils-org/config.sub src/binutils/config.sub
+*** src/binutils-org/config.sub	2012-04-25 17:53:25.000000000 +0200
+--- src/binutils/config.sub	2013-12-01 18:06:21.374405345 +0100
+***************
+*** 1348,1354 ****
+  	      | -hpux* | -unos* | -osf* | -luna* | -dgux* | -auroraux* | -solaris* \
+  	      | -sym* | -kopensolaris* \
+  	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
+! 	      | -aos* | -aros* \
+  	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
+  	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
+  	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \
+--- 1348,1354 ----
+  	      | -hpux* | -unos* | -osf* | -luna* | -dgux* | -auroraux* | -solaris* \
+  	      | -sym* | -kopensolaris* \
+  	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
+! 	      | -aos* | -aros* | -askatu* \
+  	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
+  	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
+  	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \
+diff -rcN src/binutils-org/gas/config/tc-mmix.c src/binutils/gas/config/tc-mmix.c
+*** src/binutils-org/gas/config/tc-mmix.c	2012-09-11 11:20:20.000000000 +0200
+--- src/binutils/gas/config/tc-mmix.c	2013-12-01 18:07:58.662404570 +0100
+***************
+*** 1637,1648 ****
+        /* "$X,0"; SAVE.  */
+        if (n_operands != 2
+  	  || exp[1].X_op != O_constant
+! 	  || exp[1].X_add_number != 0)
+  	{
+  	  as_bad (_("invalid operands to opcode %s: `%s'"),
+  		  instruction->name, operands);
+  	  return;
+  	}
+        break;
+  
+      case mmix_operands_unsave:
+--- 1637,1649 ----
+        /* "$X,0"; SAVE.  */
+        if (n_operands != 2
+  	  || exp[1].X_op != O_constant
+! 	  /*|| exp[1].X_add_number != 0*/)
+  	{
+  	  as_bad (_("invalid operands to opcode %s: `%s'"),
+  		  instruction->name, operands);
+  	  return;
+  	}
++ 	opcodep[3] = exp[1].X_add_number;
+        break;
+  
+      case mmix_operands_unsave:
+***************
+*** 1662,1668 ****
+        /* "0,$Z"; UNSAVE.  */
+        if (n_operands != 2
+  	  || exp[0].X_op != O_constant
+! 	  || exp[0].X_add_number != 0
+  	  || exp[1].X_op == O_constant
+  	  || (exp[1].X_op == O_register
+  	      && exp[1].X_add_number > 255))
+--- 1663,1669 ----
+        /* "0,$Z"; UNSAVE.  */
+        if (n_operands != 2
+  	  || exp[0].X_op != O_constant
+! 	  /*|| exp[0].X_add_number != 0*/
+  	  || exp[1].X_op == O_constant
+  	  || (exp[1].X_op == O_register
+  	      && exp[1].X_add_number > 255))
+***************
+*** 1672,1677 ****
+--- 1673,1679 ----
+  	  return;
+  	}
+  
++ 	opcodep[1] = exp[0].X_add_number;
+        if (exp[1].X_op == O_register)
+  	opcodep[3] = exp[1].X_add_number;
+        else
+diff -rcN src/binutils-org/ld/configure.tgt src/binutils/ld/configure.tgt
+*** src/binutils-org/ld/configure.tgt	2012-09-04 14:53:47.000000000 +0200
+--- src/binutils/ld/configure.tgt	2013-12-01 18:08:41.830404226 +0100
+***************
+*** 465,470 ****
+--- 465,471 ----
+  mips*-*-lnews*)		targ_emul=mipslnews ;;
+  mips*-*-sysv4*)         targ_emul=elf32btsmip
+  			;;
++ mmix-*-askatu*)		targ_emul=elf64mmixaskatu; targ_extra_emuls=mmo ;;
+  mmix-*-*)		targ_emul=mmo
+  			targ_extra_emuls=elf64mmix
+  			;;
+diff -rcN src/binutils-org/ld/emulparams/elf64mmixaskatu.sh src/binutils/ld/emulparams/elf64mmixaskatu.sh
+*** src/binutils-org/ld/emulparams/elf64mmixaskatu.sh	1970-01-01 01:00:00.000000000 +0100
+--- src/binutils/ld/emulparams/elf64mmixaskatu.sh	2013-12-01 18:09:24.622403885 +0100
+***************
+*** 0 ****
+--- 1,61 ----
++ TEMPLATE_NAME=elf32
++ GENERATE_SHLIB_SCRIPT=yes
++ ELFSIZE=64
++ SCRIPT_NAME=elf
++ OUTPUT_FORMAT="elf64-mmix"
++ NO_REL_RELOCS=yes
++ ENTRY=_start.
++ 
++ # Default to 0 as mmixal does.
++ TEXT_START_ADDR='0x2000'
++ # Don't add SIZEOF_HEADERS.
++ # Don't set EMBEDDED, that would be misleading; it's not that kind of system.
++ TEXT_BASE_ADDRESS=$TEXT_START_ADDR
++ DATA_ADDR='ALIGN(0x2000)'
++ 
++ MAXPAGESIZE="CONSTANT (MAXPAGESIZE)"
++ ARCH=mmix
++ MACHINE=
++ COMPILE_IN=yes
++ EXTRA_EM_FILE=mmixelf
++ 
++ # The existence of a symbol __start (or _start) should overrule Main, so
++ # it can be a user symbol without the associated mmixal magic.  We
++ # also want to provide Main as a synonym for _start, if Main wasn't
++ # defined but is referred to, and _start was defined.
++ #
++ # The reason we use a symbol "_start." as a mediator is to avoid
++ # causing ld to force the type of _start to object rather than no
++ # type, which confuses disassembly; we also make it alphanumerically
++ # a successor of _start for similar reasons.  Perhaps it's a linker
++ # bug that linker-defined symbols set the symbol-type.
++ #
++ # Note that we smuggle this into OTHER_TEXT_SECTIONS (at the end
++ # of .text) rather than TEXT_START_SYMBOLS.  This is necessary, as
++ # DEFINED wouldn't find the symbol if it was at the top; presumably
++ # before the definition, if the definition is not in the first file.
++ # FIXME: Arguably a linker bug.
++ # Only do this for a final link, or else we'll mess up e.g. error
++ # messages.
++ OTHER_TEXT_SECTIONS="
++ ${RELOCATING+
++  _start. = (DEFINED (_start) ? _start
++             : (DEFINED (Main) ? Main : (DEFINED (.text) ? .text : 0)));
++  PROVIDE (Main = DEFINED (Main) ? Main : (DEFINED (_start) ? _start : _start.));
++ }"
++ 
++ OTHER_SECTIONS='
++  .MMIX.reg_contents :
++  {
++    /* Note that this section always has a fixed VMA - that of its
++       first register * 8.  */
++    *(.MMIX.reg_contents.linker_allocated);
++    *(.MMIX.reg_contents);
++  }
++ '
++ 
++ # FIXME: Also bit by the PROVIDE bug?  If not, this could be
++ # EXECUTABLE_SYMBOLS.
++ # By default, put the high end of the stack where the register stack
++ # begins.  They grow in opposite directions.  */
++ OTHER_SYMBOLS="PROVIDE (__Stack_start = 0x6000000000000000);"
+diff -rcN src/binutils-org/ld/emultempl/mmixelf.em src/binutils/ld/emultempl/mmixelf.em
+*** src/binutils-org/ld/emultempl/mmixelf.em	2013-03-25 09:06:23.000000000 +0100
+--- src/binutils/ld/emultempl/mmixelf.em	2013-12-01 18:09:55.978403635 +0100
+***************
+*** 36,43 ****
+       difference to mmo, but the sections in elf64mmix will be aligned to a
+       page in the linked file, which is non-intuitive.  If there's ever a
+       full system with shared libraries and demand paging, you will want to
+!      exclude this file.  */
+!   config.magic_demand_paged = FALSE;
+  
+    config.separate_code = `if test "x${SEPARATE_CODE}" = xyes ; then echo TRUE ; else echo FALSE ; fi`;
+  }
+--- 36,43 ----
+       difference to mmo, but the sections in elf64mmix will be aligned to a
+       page in the linked file, which is non-intuitive.  If there's ever a
+       full system with shared libraries and demand paging, you will want to
+!      exclude this file.  
+!   config.magic_demand_paged = FALSE;*/
+  
+    config.separate_code = `if test "x${SEPARATE_CODE}" = xyes ; then echo TRUE ; else echo FALSE ; fi`;
+  }
+diff -rcN src/binutils-org/ld/Makefile.in src/binutils/ld/Makefile.in
+*** src/binutils-org/ld/Makefile.in	2013-03-25 09:06:23.000000000 +0100
+--- src/binutils/ld/Makefile.in	2013-12-01 18:10:44.814403246 +0100
+***************
+*** 3564,3569 ****
+--- 3564,3573 ----
+  ehppa64linux.c: $(srcdir)/emulparams/hppa64linux.sh \
+    $(ELF_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+  	${GENSCRIPTS} hppa64linux "$(tdir_hppa64linux)"
++ eelf64mmixaskatu.c: $(srcdir)/emulparams/elf64mmixaskatu.sh \
++   $(ELF_DEPS) $(srcdir)/emultempl/mmix-elfnmmo.em \
++   $(srcdir)/emultempl/mmixelf.em $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
++ 	${GENSCRIPTS} elf64mmixaskatu "$(tdir_elf64mmixaskatu)"
+  emmo.c: $(srcdir)/emulparams/mmo.sh $(srcdir)/emultempl/mmix-elfnmmo.em \
+    $(srcdir)/emultempl/generic.em $(srcdir)/emultempl/elf-generic.em \
+    $(srcdir)/emultempl/mmo.em \
+diff -rcN src/binutils-org/opcodes/mmix-dis.c src/binutils/opcodes/mmix-dis.c
+*** src/binutils-org/opcodes/mmix-dis.c	2012-05-18 03:59:38.000000000 +0200
+--- src/binutils/opcodes/mmix-dis.c	2013-12-01 18:12:42.618402308 +0100
+***************
+*** 58,64 ****
+  struct mmix_dis_info
+   {
+     const char *reg_name[256];
+!    const char *spec_reg_name[32];
+  
+     /* Waste a little memory so we don't have to allocate each separately.
+        We could have an array with static contents for these, but on the
+--- 58,64 ----
+  struct mmix_dis_info
+   {
+     const char *reg_name[256];
+!    const char *spec_reg_name[33];
+  
+     /* Waste a little memory so we don't have to allocate each separately.
+        We could have an array with static contents for these, but on the
+***************
+*** 194,200 ****
+  	case mmix_operands_neg:
+  	case mmix_operands_pushj:
+  	case mmix_operands_regaddr:
+- 	case mmix_operands_get:
+  	case mmix_operands_set:
+  	case mmix_operands_save:
+  	case mmix_operands_unsave:
+--- 194,199 ----
+***************
+*** 211,222 ****
+  	      return opcodep;
+  	  }
+  	break;
+  
+  	case mmix_operands_put:
+  	  /* A "PUT".  If it is "immediate", then no restrictions,
+! 	     otherwise we have to make sure the register number is < 32.  */
+  	  if ((insn & INSN_IMMEDIATE_BIT)
+! 	      || ((insn >> 16) & 255) < 32)
+  	    return opcodep;
+  	  break;
+  
+--- 210,228 ----
+  	      return opcodep;
+  	  }
+  	break;
++ 	
++ 	/* check it here, because 32 is allowed as well */
++ 	case mmix_operands_get:
++ 	  if ((insn & INSN_IMMEDIATE_BIT)
++ 	      || ((insn >> 8) & 255) < 33)
++ 	    return opcodep;
++ 	  break;
+  
+  	case mmix_operands_put:
+  	  /* A "PUT".  If it is "immediate", then no restrictions,
+! 	     otherwise we have to make sure the register number is < 33.  */
+  	  if ((insn & INSN_IMMEDIATE_BIT)
+! 	      || ((insn >> 16) & 255) < 33)
+  	    return opcodep;
+  	  break;
+  
+***************
+*** 489,500 ****
+  
+      case mmix_operands_save:
+        /* SAVE - "$X,0".  */
+!       (*info->fprintf_func) (info->stream, "%s,0", minfop->reg_name[x]);
+        break;
+  
+      case mmix_operands_unsave:
+        /* UNSAVE - "0,$Z".  */
+!       (*info->fprintf_func) (info->stream, "0,%s", minfop->reg_name[z]);
+        break;
+  
+      case mmix_operands_xyz_opt:
+--- 495,506 ----
+  
+      case mmix_operands_save:
+        /* SAVE - "$X,0".  */
+!       (*info->fprintf_func) (info->stream, "%s,%d", minfop->reg_name[x], z);
+        break;
+  
+      case mmix_operands_unsave:
+        /* UNSAVE - "0,$Z".  */
+!       (*info->fprintf_func) (info->stream, "%d,%s", x, minfop->reg_name[z]);
+        break;
+  
+      case mmix_operands_xyz_opt:
+diff -rcN src/binutils-org/opcodes/mmix-opc.c src/binutils/opcodes/mmix-opc.c
+*** src/binutils-org/opcodes/mmix-opc.c	2009-09-02 09:20:30.000000000 +0200
+--- src/binutils/opcodes/mmix-opc.c	2013-12-01 18:13:53.754401741 +0100
+***************
+*** 59,64 ****
+--- 59,65 ----
+     {"rXX", 29},
+     {"rYY", 30},
+     {"rZZ", 31},
++    {"rSS", 32},
+     {NULL, 0}
+   };
+  
+***************
+*** 315,323 ****
+  
+     {"pushj",	Z (0xf2),	OP (pushj),		J},
+     {"save",	O (0xfa)
+! 		  | 0xffff,	OP (save),		M},
+     {"unsave",	O (0xfb)
+! 		  | 0xffff00,	OP (unsave),		M},
+  
+     {"geta",	Z (0xf4),	OP (regaddr),		N},
+     {"sync",	O (0xfc),	OP (sync),		N},
+--- 316,324 ----
+  
+     {"pushj",	Z (0xf2),	OP (pushj),		J},
+     {"save",	O (0xfa)
+! 		  | 0xff00,	OP (save),		M},
+     {"unsave",	O (0xfb)
+! 		  | 0x00ff00,	OP (unsave),		M},
+  
+     {"geta",	Z (0xf4),	OP (regaddr),		N},
+     {"sync",	O (0xfc),	OP (sync),		N},
+***************
+*** 325,331 ****
+  				OP (xyz_opt),		N},
+  
+     {"put", Z (0xf6) | 0xff00,	OP (put),		N},
+!    {"get", O (0xfe) | 0xffe0,	OP (get),		N},
+     {"trip",	O (0xff),	OP (xyz_opt),		J},
+  
+     /* We have mmixal pseudos in the ordinary instruction table so we can
+--- 326,332 ----
+  				OP (xyz_opt),		N},
+  
+     {"put", Z (0xf6) | 0xff00,	OP (put),		N},
+!    {"get", O (0xfe) | 0xff00,	OP (get),		N},
+     {"trip",	O (0xff),	OP (xyz_opt),		J},
+  
+     /* We have mmixal pseudos in the ordinary instruction table so we can

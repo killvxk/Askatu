@@ -1,0 +1,252 @@
+diff -rcN src/gcc-org/config.sub src/gcc/config.sub
+*** src/gcc-org/config.sub	2013-01-11 14:02:58.000000000 +0100
+--- src/gcc/config.sub	2013-12-08 11:58:45.978192221 +0100
+***************
+*** 1358,1364 ****
+  	      | -hpux* | -unos* | -osf* | -luna* | -dgux* | -auroraux* | -solaris* \
+  	      | -sym* | -kopensolaris* | -plan9* \
+  	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
+! 	      | -aos* | -aros* \
+  	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
+  	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
+  	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \
+--- 1358,1364 ----
+  	      | -hpux* | -unos* | -osf* | -luna* | -dgux* | -auroraux* | -solaris* \
+  	      | -sym* | -kopensolaris* | -plan9* \
+  	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
+! 	      | -aos* | -aros* | -askatu* \
+  	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
+  	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
+  	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \
+diff -rcN src/gcc-org/gcc/config/askatu.h src/gcc/gcc/config/askatu.h
+*** src/gcc-org/gcc/config/askatu.h	1970-01-01 01:00:00.000000000 +0100
+--- src/gcc/gcc/config/askatu.h	2013-12-08 11:58:46.222192226 +0100
+***************
+*** 0 ****
+--- 1,30 ----
++   #undef   STARTFILE_SPEC
++   #define STARTFILE_SPEC "%{shared|pie:crt0S.o%s;:crt0.o%s} %{shared:crt1S.o%s;:crt1.o%s} %{shared|pie:crtbeginS.o%s;:crtbegin.o%s}"
++   
++   #undef   ENDFILE_SPEC
++   #define ENDFILE_SPEC "%{shared|pie:crtendS.o%s;:crtend.o%s} %{shared:crtnS.o%s;:crtn.o%s}"
++   
++   #undef TARGET_OS_CPP_BUILTINS
++   #define TARGET_OS_CPP_BUILTINS()      \
++     do {                                \
++       /* to force a strcmp for typeinfo-compares */ \
++       builtin_define ("__GXX_MERGED_TYPEINFO_NAMES=0"); \
++       builtin_define ("__GXX_TYPEINFO_EQUALITY_INLINE=0"); \
++       builtin_define_std ("askatu");      \
++       builtin_define_std ("unix");      \
++       builtin_assert ("system=askatu");   \
++       builtin_assert ("system=unix");   \
++     } while(0);
++   
++   #undef LINK_GCC_C_SEQUENCE_SPEC
++   #define LINK_GCC_C_SEQUENCE_SPEC \
++     "%{static:--start-group} %G %L %{static:--end-group}%{!static:%G}"
++   
++   /* Use --as-needed -lgcc_s for eh support.  */
++   #ifdef HAVE_LD_AS_NEEDED
++   #define USE_LD_AS_NEEDED 1
++   #endif
++   
++   #define NO_IMPLICIT_EXTERN_C
++ 
++   #define USE_TM_CLONE_REGISTRY 0
+diff -rcN src/gcc-org/gcc/config.gcc src/gcc/gcc/config.gcc
+*** src/gcc-org/gcc/config.gcc	2013-10-03 02:47:24.000000000 +0200
+--- src/gcc/gcc/config.gcc	2013-12-08 11:58:46.222192226 +0100
+***************
+*** 554,559 ****
+--- 554,565 ----
+  
+  # Common parts for widely ported systems.
+  case ${target} in
++ *-*-askatu*)
++   extra_parts="crtbegin.o crtbeginS.o crtend.o crtendS.o"
++   gas=yes
++   gnu_ld=yes
++   default_use_cxa_atexit=yes
++   ;;
+  *-*-darwin*)
+    tmake_file="t-darwin ${cpu_type}/t-darwin"
+    tm_file="${tm_file} darwin.h"
+***************
+*** 815,820 ****
+--- 821,831 ----
+  esac
+  
+  case ${target} in
++ i[3-7]86-*-askatu*)
++   tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h i386/i386elf.h askatu.h"
++   tmake_file="${tmake_file} t-svr4"
++   use_fixproto=yes
++   ;;
+  aarch64*-*-elf)
+  	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h"
+  	tm_file="${tm_file} aarch64/aarch64-elf.h aarch64/aarch64-elf-raw.h"
+diff -rcN src/gcc-org/libgcc/config/t-askatu src/gcc/libgcc/config/t-askatu
+*** src/gcc-org/libgcc/config/t-askatu	1970-01-01 01:00:00.000000000 +0100
+--- src/gcc/libgcc/config/t-askatu	2013-12-08 12:04:43.406200362 +0100
+***************
+*** 0 ****
+--- 1,7 ----
++ CRTSTUFF_T_CFLAGS += -mregparm=3
++ CRTSTUFF_T_CFLAGS_S += -mregparm=3
++ LIBGCC2_CFLAGS += -mregparm=3
++ 
++ # for some reason we need -Wl,-shared as well, i.e. -shared is not enough
++ SHLIB_LDFLAGS = -Wl,-shared -Wl,-soname,$(SHLIB_SONAME)
++ 
+diff -rcN src/gcc-org/libgcc/config.host src/gcc/libgcc/config.host
+*** src/gcc-org/libgcc/config.host	2013-07-09 23:35:57.000000000 +0200
+--- src/gcc/libgcc/config.host	2013-12-08 11:58:46.222192226 +0100
+***************
+*** 280,285 ****
+--- 280,289 ----
+  esac
+  
+  case ${host} in
++ i[3-7]86-*-askatu*)
++ 	extra_parts="crtbegin.o crtbeginS.o crtend.o crtendS.o"
++ 	tmake_file="${tmake_file} t-askatu i386/t-crtstuff t-slibgcc t-libgcc-pic t-crtstuff-pic"
++ 	;;
+  aarch64*-*-elf)
+  	extra_parts="$extra_parts crtbegin.o crtend.o crti.o crtn.o"
+  	tmake_file="${tmake_file} ${cpu_type}/t-aarch64"
+diff -rcN src/gcc-org/libgcc/gthr-posix.h src/gcc/libgcc/gthr-posix.h
+*** src/gcc-org/libgcc/gthr-posix.h	2013-02-04 20:06:20.000000000 +0100
+--- src/gcc/libgcc/gthr-posix.h	2013-12-08 11:58:46.222192226 +0100
+***************
+*** 33,38 ****
+--- 33,39 ----
+  #define __GTHREADS_CXX0X 1
+  
+  #include <pthread.h>
++ #include <sched.h>
+  
+  #if ((defined(_LIBOBJC) || defined(_LIBOBJC_WEAK)) \
+       || !defined(_GTHREAD_USE_MUTEX_TIMEDLOCK))
+diff -rcN src/gcc-org/libstdc++-v3/libsupc++/eh_term_handler.cc src/gcc/libstdc++-v3/libsupc++/eh_term_handler.cc
+*** src/gcc-org/libstdc++-v3/libsupc++/eh_term_handler.cc	2013-02-03 18:54:05.000000000 +0100
+--- src/gcc/libstdc++-v3/libsupc++/eh_term_handler.cc	2013-12-08 11:58:46.222192226 +0100
+***************
+*** 32,38 ****
+     --disable-libstdcxx-verbose and rebuilding the library.
+     In a freestanding environment, we default to this latter approach.  */
+  
+! #if _GLIBCXX_HOSTED && _GLIBCXX_VERBOSE
+  /* The current installed user handler.  */
+  std::terminate_handler __cxxabiv1::__terminate_handler =
+  	__gnu_cxx::__verbose_terminate_handler;
+--- 32,38 ----
+     --disable-libstdcxx-verbose and rebuilding the library.
+     In a freestanding environment, we default to this latter approach.  */
+  
+! #if 1 // _GLIBCXX_HOSTED && _GLIBCXX_VERBOSE
+  /* The current installed user handler.  */
+  std::terminate_handler __cxxabiv1::__terminate_handler =
+  	__gnu_cxx::__verbose_terminate_handler;
+diff -rcN src/gcc-org/libstdc++-v3/libsupc++/vterminate.cc src/gcc/libstdc++-v3/libsupc++/vterminate.cc
+*** src/gcc-org/libstdc++-v3/libsupc++/vterminate.cc	2013-02-03 18:54:05.000000000 +0100
+--- src/gcc/libstdc++-v3/libsupc++/vterminate.cc	2013-12-08 11:58:46.222192226 +0100
+***************
+*** 24,35 ****
+  
+  #include <bits/c++config.h>
+  
+! #if _GLIBCXX_HOSTED
+  #include <cstdlib>
+  #include <exception>
+  #include <bits/exception_defines.h>
+  #include <cxxabi.h>
+! # include <cstdio>
+  
+  using namespace std;
+  using namespace abi;
+--- 24,40 ----
+  
+  #include <bits/c++config.h>
+  
+! #if 1 // _GLIBCXX_HOSTED
+  #include <cstdlib>
+  #include <exception>
+  #include <bits/exception_defines.h>
+  #include <cxxabi.h>
+! // don't include cstdio here because thats too much trouble
+! //# include <cstdio>
+! extern "C" void abort(void);
+! extern "C" int fputs(const char*,void*);
+! extern "C" void *free(void*);
+! extern void *stderr;
+  
+  using namespace std;
+  using namespace abi;
+***************
+*** 62,68 ****
+  	  int status = -1;
+  	  char *dem = 0;
+  	  
+! 	  dem = __cxa_demangle(name, 0, 0, &status);
+  
+  	  fputs("terminate called after throwing an instance of '", stderr);
+  	  if (status == 0)
+--- 67,73 ----
+  	  int status = -1;
+  	  char *dem = 0;
+  	  
+! 	  //dem = __cxa_demangle(name, 0, 0, &status);
+  
+  	  fputs("terminate called after throwing an instance of '", stderr);
+  	  if (status == 0)
+diff -rcN src/gcc-org/libstdc++-v3/configure src/gcc/libstdc++-v3/configure
+*** src/gcc-org/libstdc++-v3/configure	2013-05-24 20:10:37.000000000 +0200
+--- src/gcc/libstdc++-v3/configure	2014-04-08 09:07:30.736074231 +0200
+***************
+*** 11057,11062 ****
+--- 11057,11070 ----
+    shlibpath_var=LD_LIBRARY_PATH
+    ;;
+  
++ askatu*)
++   library_names_spec='${libname}${release}${shared_ext}$versuffix ${libname}${shared_ext}$versuffix'
++   need_lib_prefix=no
++   need_version=no
++   dynamic_linker='/bin/dynlink'
++   hardcode_into_libs=yes
++   ;;
++ 
+  *)
+    dynamic_linker=no
+    ;;
+***************
+*** 13168,13173 ****
+--- 13176,13185 ----
+  	    ;;
+  	esac
+        ;;
++       
++       askatu*)
++       	ld_shlibs_CXX=yes
++       	;;
+  
+        tandem*)
+          case $cc_basename in
+***************
+*** 14557,14562 ****
+--- 14569,14582 ----
+    dynamic_linker='GNU/Linux ld.so'
+    ;;
+  
++ askatu*)
++   library_names_spec='${libname}${release}${shared_ext}$versuffix ${libname}${shared_ext}$versuffix'
++   need_lib_prefix=no
++   need_version=no
++   dynamic_linker='/bin/dynlink'
++   hardcode_into_libs=yes
++   ;;
++ 
+  netbsd*)
+    version_type=sunos
+    need_lib_prefix=no
