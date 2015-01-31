@@ -1,0 +1,10 @@
+#!/bin/sh
+cat >$1/config-$ASK_MAC <<EOF
+root askatu
+exec boot/askatu_test
+load /bin/initloader
+EOF
+
+files="boot/askatu_test bin/initloader"
+( cd $1/dist && rsync --progress -RLp $files $ASK_SERVER/askatu )
+( cd $1 && rsync --progress -RLp config-$ASK_MAC $ASK_SERVER )

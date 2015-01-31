@@ -1,0 +1,6 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCXXProg(
+	'sbin', target = 'tcpip', source = [env.Glob('*.cc'), env.Glob('*/*.cc')], LIBS = ['usergroup']
+)

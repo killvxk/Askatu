@@ -1,0 +1,4 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuLib(target = 'vbe', source = env.Glob('*.cc'))

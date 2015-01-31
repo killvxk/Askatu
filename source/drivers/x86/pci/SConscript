@@ -1,0 +1,6 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCXXProg(
+	'sbin', target = 'pci', source = env.Glob('*.cc'), force_static = True
+)

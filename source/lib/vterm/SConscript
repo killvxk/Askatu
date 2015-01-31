@@ -1,0 +1,4 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuLib(target = 'vterm', source = env.Glob('*.cc'))

@@ -1,0 +1,4 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCProg('bin', target = 'wc', source = env.Glob('*.c'))

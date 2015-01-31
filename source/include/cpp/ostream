@@ -1,0 +1,301 @@
+// -*- C++ -*-
+/**
+ * $Id$
+ * Copyright (C) 2008 - 2014 Nils Asmussen
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#pragma once
+
+#include <stddef.h>
+#include <sys/width.h>
+#include <impl/streams/ios.h>
+#include <impl/streams/ios_base.h>
+
+namespace std {
+	/**
+	 * The basic output-stream that provides formated- and unformated-output-methods.
+	 */
+	class ostream: virtual public ios {
+	public:
+		typedef ios::char_type char_type;
+		typedef ios::int_type int_type;
+		typedef ios::size_type size_type;
+		typedef ios::pos_type pos_type;
+		typedef ios::off_type off_type;
+
+		/**
+		 * Constructs a new output-stream with given streambuffer
+		 */
+		explicit ostream(streambuf* sb)
+			: _sb(sb) {
+			ios::init(sb);
+		}
+		/**
+		 * Destructor
+		 */
+		virtual ~ostream() {
+		}
+
+		/**
+		 * For pre- and post-operations
+		 */
+		class sentry {
+		public:
+			/**
+			 * If os.good() is nonzero, prepares for formatted or unformatted output.
+			 */
+			explicit sentry(ostream& os);
+			/**
+			 * Destructor
+			 */
+			~sentry();
+			/**
+			 * @return whether everything is ok
+			 */
+			operator bool() const {
+				return _ok;
+			}
+		private:
+			sentry(const sentry &); // not defined
+			sentry & operator =(const sentry &); // not defined
+
+		private:
+			bool _ok;
+			ostream& _os;
+		};
+
+		/**
+		 * Calls pf(*this) and returns *this
+		 */
+		ostream& operator <<(ostream& (*pf)(ostream&)) {
+			pf(*this);
+			return *this;
+		}
+		ostream& operator <<(ios& (*pf)(ios&)) {
+			pf(*this);
+			return *this;
+		}
+		ostream& operator <<(ios_base & (*pf)(ios_base &)) {
+			pf(*this);
+			return *this;
+		}
+
+		/**
+		 * Writes the given integer or floating-point-number into the output-stream
+		 *
+		 * @param n the integer
+		 * @param f the floating-point-number
+		 * @param p the pointer
+		 */
+		ostream& operator <<(bool n);
+		ostream& operator <<(short n) {
+			writeSigned(n);
+			return *this;
+		}
+		ostream& operator <<(unsigned short n) {
+			writeUnsigned(n);
+			return *this;
+		}
+		ostream& operator <<(int n) {
+			writeSigned(n);
+			return *this;
+		}
+		ostream& operator <<(unsigned int n) {
+			writeUnsigned(n);
+			return *this;
+		}
+		ostream& operator <<(long n) {
+			writeSigned(n);
+			return *this;
+		}
+		ostream& operator <<(unsigned long n) {
+			writeUnsigned(n);
+			return *this;
+		}
+		ostream& operator <<(long long n) {
+			writeSigned(n);
+			return *this;
+		}
+		ostream& operator <<(unsigned long long n) {
+			writeUnsigned(n);
+			return *this;
+		}
+		ostream& operator <<(float f) {
+			writeDouble(f);
+			return *this;
+		}
+		ostream& operator <<(double f) {
+			writeDouble(f);
+			return *this;
+		}
+		ostream& operator <<(long double f) {
+			writeDouble(f);
+			return *this;
+		}
+		ostream& operator <<(const void * p) {
+			writeUnsigned((unsigned long)(p));
+			return *this;
+		}
+
+		ostream& operator <<(streambuf* sb);
+
+		/**
+		 * Writes the given character into the output-stream
+		 *
+		 * @param c the character
+		 * @return *this
+		 */
+		ostream& put(char_type c) {
+			return write(&c,1);
+		}
+		/**
+		 * Writes <n> characters from the given string into the stream
+		 *
+		 * @param s the string
+		 * @param n the number of chars to write
+		 * @return *this
+		 */
+		ostream& write(const char_type * s,streamsize n);
+		/**
+		 * Flushes the buffer
+		 */
+		ostream& flush();
+
+		/* TODO
+		 * pos_type tellp();
+		ostream& seekp(pos_type);
+		ostream& seekp(off_type,ios_base::seekdir);*/
+
+	private:
+		template<class T>
+		void writeSigned(T n) {
+			// write as unsigned if oct or hex is desired
+			if(!(ios_base::flags() & ios_base::dec)) {
+				writeUnsigned(static_cast<unsigned long>(n));
+				return;
+			}
+			sentry se(*this);
+			if(se) {
+				try {
+					streamsize nwidth,pwidth;
+					writePadLeft(n,nwidth,pwidth);
+					// print number
+					writeSChars(n);
+					// pad right
+					if((ios_base::flags() & ios_base::left) && pwidth > nwidth)
+						writePad(pwidth - nwidth);
+				}
+				catch(...) {
+					ios::setstate(ios_base::badbit);
+				}
+				ios_base::width(0);
+			}
+		}
+
+		template<class T>
+		void writeUnsigned(T u) {
+			static const char *numTableSmall = "0123456789abcdef";
+			static const char *numTableBig = "0123456789ABCDEF";
+			sentry se(*this);
+			if(se) {
+				try {
+					int base = ios_base::get_base();
+					streamsize nwidth,pwidth;
+					writeUPadLeft(u,base,nwidth,pwidth);
+					// print number
+					if(ios_base::flags() & ios_base::uppercase)
+						writeUChars(u,base,numTableBig);
+					else
+						writeUChars(u,base,numTableSmall);
+					// pad right
+					if((ios_base::flags() & ios_base::left) && pwidth > nwidth)
+						writePad(pwidth - nwidth);
+				}
+				catch(...) {
+					ios::setstate(ios_base::badbit);
+				}
+				ios_base::width(0);
+			}
+		}
+
+		template<class T>
+		void writeSChars(T n) {
+			if(n < 0) {
+				_sb->put('-');
+				n = -n;
+			}
+			if(n >= 10)
+				writeSChars(n / 10);
+			_sb->put('0' + (n % 10));
+		}
+
+		template<class T>
+		void writeUChars(T u,unsigned int base,const char *hexchars) {
+			if(u >= base)
+				writeUChars(u / base,base,hexchars);
+			_sb->put(hexchars[(u % base)]);
+		}
+
+		void writeDouble(long double d);
+		void writeDoubleChars(long double d);
+		void writePad(streamsize count);
+
+		void writeUPadLeft(unsigned long long u,int base,streamsize &nwidth,streamsize &pwidth);
+		void writePadLeft(long long n,streamsize &nwidth,streamsize &pwidth);
+
+	private:
+		streambuf* _sb;
+	};
+
+	/**
+	 * Writes the given character into the given stream
+	 */
+	inline ostream& operator <<(ostream& os,char c) {
+		os.put(c);
+		return os;
+	}
+	/**
+	 * Writes the given string into the given stream
+	 */
+	inline ostream& operator <<(ostream& os,const char* s) {
+		os.write(s,strlen(s));
+		return os;
+	}
+
+	/**
+	 * Writes a newline into the given stream
+	 */
+	inline ostream& endl(ostream& os) {
+		os.put('\n');
+		os.flush();
+		return os;
+	}
+	/**
+	 * Writes a null-character into the given stream
+	 */
+	inline ostream& ends(ostream& os) {
+		os.put('\0');
+		return os;
+	}
+	/**
+	 * Flushes the given stream
+	 */
+	inline ostream& flush(ostream& os) {
+		os.flush();
+		return os;
+	}
+}

@@ -1,0 +1,21 @@
+#!/bin/sh
+. boot/$ASK_TGTTYPE/images.sh
+create_cd $1/dist $1/cd.iso
+
+cat >$1/config-52-54-00-12-34-56 <<EOF
+root askatu
+exec /boot/askatu root=/dev/iso9660-ramdisk-cd
+load /bin/initloader
+load /sbin/ramdisk /dev/ramdisk-cd -f /sys/boot/cd.iso
+load /sbin/pci /dev/pci
+load /sbin/iso9660 /dev/iso9660-ramdisk-cd /dev/ramdisk-cd
+load /cd.iso
+EOF
+
+files="boot/askatu bin/initloader sbin/ramdisk sbin/iso9660"
+( cd $1/dist && rsync --progress -RLp $files $ASK_SERVER/askatu )
+( cd $1 && rsync --progress -RLp cd.iso $ASK_SERVER/askatu )
+( cd $1 && rsync --progress -RLp config-52-54-00-12-34-56 $ASK_SERVER )
+
+$ASK_QEMU -m 256 -net nic,model=ne2k_pci -net nic -net user -serial stdio \
+	-boot n -bootp pulsar -tftp $ASK_SERVER $2 | tee log.txt

@@ -1,0 +1,389 @@
+// -*- C++ -*-
+/**
+ * $Id$
+ * Copyright (C) 2008 - 2014 Nils Asmussen
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#pragma once
+
+#include <bits/c++config.h>
+#include <stddef.h>
+#include <functional>
+#include <algorithm>
+#include <utility>
+#include <stdexcept>
+#include <limits>
+
+#include <impl/map/bintree.h>
+
+namespace std {
+	/**
+	 * Maps are a kind of associative containers that stores elements formed by the combination
+	 * of a key value and a mapped value.
+	 * Internally, the elements in the map are sorted from lower to higher key value following
+	 * a specific strict weak ordering criterion set on construction.
+	 */
+	template<class Key,class T,class Cmp = less<Key> >
+	class map {
+		template<class Key1,class T1,class Cmp1>
+		friend bool operator ==(const map<Key1,T1,Cmp1>& x,const map<Key1,T1,Cmp1>& y);
+		template<class Key1,class T1,class Cmp1>
+		friend bool operator <(const map<Key1,T1,Cmp1>& x,const map<Key1,T1,Cmp1>& y);
+
+	public:
+		typedef Key key_type;
+		typedef T mapped_type;
+		typedef Cmp key_compare;
+		typedef typename bintree<Key,T,Cmp>::value_type value_type;
+		typedef typename bintree<Key,T,Cmp>::reference reference;
+		typedef typename bintree<Key,T,Cmp>::const_reference const_reference;
+		typedef typename bintree<Key,T,Cmp>::iterator iterator;
+		typedef typename bintree<Key,T,Cmp>::const_iterator const_iterator;
+		typedef typename bintree<Key,T,Cmp>::size_type size_type;
+		typedef typename bintree<Key,T,Cmp>::difference_type difference_type;
+		typedef typename bintree<Key,T,Cmp>::pointer pointer;
+		typedef typename bintree<Key,T,Cmp>::const_pointer const_pointer;
+		typedef typename bintree<Key,T,Cmp>::reverse_iterator reverse_iterator;
+		typedef typename bintree<Key,T,Cmp>::const_reverse_iterator const_reverse_iterator;
+
+	public:
+		/**
+		 * Creates a new, empty map with given compare-object
+		 *
+		 * @param comp the compare-object
+		 */
+		explicit map(const Cmp& comp = Cmp())
+			: _tree(bintree<Key,T,Cmp>(comp)) {
+		}
+		/**
+		 * Creates a new map and inserts [<first> .. <last>) into the map
+		 *
+		 * @param first the beginning (inclusive)
+		 * @param last the end (exclusive)
+		 * @param comp the compare-object
+		 */
+		template<class InputIterator>
+		map(InputIterator first,InputIterator last,const Cmp& comp = Cmp())
+			: _tree(bintree<Key,T,Cmp>(comp)) {
+			for(; first != last; ++first)
+				insert(*first);
+		}
+		/**
+		 * Copy-constructor
+		 */
+		map(const map<Key,T,Cmp>& x)
+			: _tree(x._tree) {
+		}
+		/**
+		 * Assignment-operator
+		 */
+		map<Key,T,Cmp>& operator =(const map<Key,T,Cmp>& x) {
+			_tree = x._tree;
+			return *this;
+		}
+		/**
+		 * Destructor
+		 */
+		~map() {
+		}
+
+		/**
+		 * @return the beginning of the map
+		 */
+		iterator begin() {
+			return _tree.begin();
+		}
+		/**
+		 * @return the beginning of the map, as const-iterator
+		 */
+		const_iterator begin() const {
+			return _tree.begin();
+		}
+		/**
+		 * @return the end of the map
+		 */
+		iterator end() {
+			return _tree.end();
+		}
+		/**
+		 * @return the end of the map, as const-iterator
+		 */
+		const_iterator end() const {
+			return _tree.end();
+		}
+		/**
+		 * @return the beginning of the map for the reverse-iterator (i.e. the end)
+		 */
+		reverse_iterator rbegin() {
+			return _tree.rbegin();
+		}
+		/**
+		 * @return the beginning of the map for the const-reverse-iterator (i.e. the end)
+		 */
+		const_reverse_iterator rbegin() const {
+			return _tree.rbegin();
+		}
+		/**
+		 * @return the end of the map for the reverse-iterator (i.e. the beginning)
+		 */
+		reverse_iterator rend() {
+			return _tree.rend();
+		}
+		/**
+		 * @return the end of the map for the const-reverse-iterator (i.e. the beginning)
+		 */
+		const_reverse_iterator rend() const {
+			return _tree.rend();
+		}
+
+		/**
+		 * @return true if the map is empty
+		 */
+		bool empty() const {
+			return _tree.empty();
+		}
+		/**
+		 * @return the number of elements in the map
+		 */
+		size_type size() const {
+			return _tree.size();
+		}
+		/**
+		 * @return the max number of elements supported
+		 */
+		size_type max_size() const {
+			return _tree.max_size();
+		}
+
+		/**
+		 * Returns a reference to the value of the element with key <x>. If the key does not yet
+		 * exists, it is created with value T().
+		 *
+		 * @param x the key
+		 * @return reference to the element with key <x>
+		 */
+		T& operator [](const key_type& x) {
+			iterator it = _tree.find(x);
+			if(it == _tree.end())
+				it = _tree.insert(x,T());
+			return it->second;
+		}
+		/**
+		 * Like operator[], but throws out_of_range if the key doesn't exist
+		 *
+		 * @param x the key
+		 * @return reference to the element with key <x>
+		 */
+		T& at(const key_type& x) {
+			iterator it = _tree.find(x);
+			if(it == _tree.end())
+				throw out_of_range("Key not found");
+			return it->second;
+		}
+		const T& at(const key_type& x) const {
+			const_iterator it = _tree.find(x);
+			if(it == _tree.end())
+				throw out_of_range("Key not found");
+			return it->second;
+		}
+
+		/**
+		 * Inserts <x> into the map and returns an iterator to the insertion-point and whether
+		 * a new element has been inserted. If the key does already exists, nothing is done.
+		 *
+		 * @param x the element to insert
+		 * @return a pair of the iterator and whether an element has been inserted
+		 */
+		pair<iterator,bool> insert(const value_type& x) {
+			size_type s = _tree.size();
+			iterator it = _tree.insert(x,false);
+			return make_pair<iterator,bool>(it,_tree.size() > s);
+		}
+		/**
+		 * Inserts <x> into the map and returns an iterator to the insertion-point. Gives the
+		 * insert-algorithm a hint with <pos>. I.e. it tries to start at this node, if possible,
+		 * which can speed up the insert a lot.
+		 * If the key does already exists, nothing is done.
+		 *
+		 * @param pos the position where to start
+		 * @param x the element to insert
+		 * @return the iterator
+		 */
+		iterator insert(iterator pos,const value_type& x) {
+			return _tree.insert(pos,x.first,x.second,false);
+		}
+		/**
+		 * Inserts all elements in the range [<first> .. <last>) into the map
+		 *
+		 * @param first the beginning (inclusive)
+		 * @param last the end (exclusive)
+		 */
+		template<class InputIterator>
+		void insert(InputIterator first,InputIterator last) {
+			for(; first != last; ++first)
+				insert(*first);
+		}
+		/**
+		 * Removes the element at given position
+		 *
+		 * @param position the position
+		 */
+		void erase(iterator position) {
+			_tree.erase(position);
+		}
+		/**
+		 * Removes the element with given key
+		 *
+		 * @param x the key
+		 * @return 1 if it has been removed, 0 otherwise
+		 */
+		size_type erase(const key_type& x) {
+			return _tree.erase(x) ? 1 : 0;
+		}
+		/**
+		 * Erases the range [<first> .. <last>)
+		 *
+		 * @param first the beginning (inclusive)
+		 * @param last the end (exclusive)
+		 */
+		void erase(iterator first,iterator last) {
+			_tree.erase(first,last);
+		}
+		/**
+		 * Swaps *this with <x>
+		 *
+		 * @param x the other map
+		 */
+		void swap(map<Key,T,Cmp>& x) {
+			std::swap(*this,x);
+		}
+		/**
+		 * Removes all elements
+		 */
+		void clear() {
+			_tree.clear();
+		}
+
+		/**
+		 * @return the key-compare-object
+		 */
+		key_compare key_comp() const {
+			return _tree.key_comp();
+		}
+		/**
+		 * @return the value-compare-object
+		 */
+		typename bintree<Key,T,Cmp>::value_compare value_comp() const {
+			return _tree.value_comp();
+		}
+
+		/**
+		 * Searches for the key <x> and returns an iterator to the position
+		 *
+		 * @param x the key
+		 * @return the position or end() if not found
+		 */
+		iterator find(const key_type& x) {
+			return _tree.find(x);
+		}
+		const_iterator find(const key_type& x) const {
+			return _tree.find(x);
+		}
+		/**
+		 * @param x the key
+		 * @return 1 if the key exists, 0 otherwise
+		 */
+		size_type count(const key_type& x) const {
+			return _tree.find(x) == end() ? 0 : 1;
+		}
+		/**
+		 * Returns an iterator to the first element that does not compare less than <x>
+		 *
+		 * @param x the key to find
+		 * @return the iterator (end() if not found)
+		 */
+		iterator lower_bound(const key_type &x) {
+			return _tree.lower_bound(x);
+		}
+		const_iterator lower_bound(const key_type &x) const {
+			return _tree.lower_bound(x);
+		}
+		/**
+		 * Returns an iterator to the first element that does compare greater than <x>
+		 *
+		 * @param x the key to find
+		 * @return the iterator (end() if not found)
+		 */
+		iterator upper_bound(const key_type &x) {
+			return _tree.upper_bound(x);
+		}
+		const_iterator upper_bound(const key_type &x) const {
+			return _tree.upper_bound(x);
+		}
+
+		/**
+		 * Returns a pair with the bounds for the given key. That means it returns a pair where
+		 * the first element is lower_bound(x) and the second upper_bound(x).
+		 *
+		 * @param x the key
+		 * @return the pair
+		 */
+		pair<iterator,iterator> equal_range(const key_type& x) {
+			return make_pair<iterator,iterator>(lower_bound(x),upper_bound(x));
+		}
+		pair<const_iterator,const_iterator> equal_range(const key_type& x) const {
+			return make_pair<const_iterator,const_iterator>(lower_bound(x),upper_bound(x));
+		}
+
+	private:
+		bintree<Key,T,Cmp> _tree;
+	};
+
+	/**
+	 * Comparison-operators based on std::lexigraphical_compare and std::equal
+	 */
+	template<class Key,class T,class Cmp>
+	inline bool operator ==(const map<Key,T,Cmp>& x,const map<Key,T,Cmp>& y) {
+		return x._tree == y._tree;
+	}
+	template<class Key,class T,class Cmp>
+	inline bool operator <(const map<Key,T,Cmp>& x,const map<Key,T,Cmp>& y) {
+		return x._tree < y._tree;
+	}
+	template<class Key,class T,class Cmp>
+	inline bool operator !=(const map<Key,T,Cmp>& x,const map<Key,T,Cmp>& y) {
+		return !(x == y);
+	}
+	template<class Key,class T,class Cmp>
+	inline bool operator >(const map<Key,T,Cmp>& x,const map<Key,T,Cmp>& y) {
+		return y < x;
+	}
+	template<class Key,class T,class Cmp>
+	inline bool operator >=(const map<Key,T,Cmp>& x,const map<Key,T,Cmp>& y) {
+		return !(x < y);
+	}
+	template<class Key,class T,class Cmp>
+	inline bool operator <=(const map<Key,T,Cmp>& x,const map<Key,T,Cmp>& y) {
+		return !(y < x);
+	}
+
+	// specialized algorithms:
+	template<class Key,class T,class Cmp>
+	inline void swap(map<Key,T,Cmp>& x,map<Key,T,Cmp>& y) {
+		x.swap(y);
+	}
+}

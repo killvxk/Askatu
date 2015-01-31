@@ -1,0 +1,11 @@
+# -*- Mode: Python -*-
+
+Import('env')
+myenv = env.Clone()
+myenv.Append(LINKFLAGS = ' -nostartfiles')
+myenv.AskatuCProg(
+	'bin',
+	target = 'initloader',
+	source = [myenv.Glob('$TGT/*.S'), myenv.Glob('$TGTTYPE/*.S'), myenv.Glob('*.c')],
+	force_static = True
+)

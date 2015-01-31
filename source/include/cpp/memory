@@ -1,0 +1,528 @@
+// -*- C++ -*-
+/**
+ * $Id$
+ * Copyright (C) 2008 - 2014 Nils Asmussen
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#pragma once
+
+#include <bits/c++config.h>
+#include <stddef.h>
+#include <functional>
+#include <algorithm>
+#include <utility>
+#include <ostream>
+#include <assert.h>
+
+#include <impl/memory/unique_ptr.h>
+#include <impl/helper.h>
+
+namespace std {
+	template<class T>
+	class shared_ptr;
+	template<class T>
+	class weak_ptr;
+
+	namespace detail {
+		template<class T>
+		class refobject;
+		template<class T,bool V>
+		struct set_refobject_base;
+	}
+
+	class bad_weak_ptr : public std::exception {
+	public:
+		bad_weak_ptr() noexcept : exception() {
+		}
+	    virtual const char* what() const throw() {
+	    	return "bad_weak_ptr";
+	    }
+	};
+
+	/**
+	 * If you would like to attach a shared_ptr from 'this' to one or more existing shared_ptr for
+	 * 'this', you can inherit from this class. This way, you can use shared_from_this() to retrieve
+	 * a shared_ptr for it.
+	 */
+	template<class T>
+	class enable_shared_from_this {
+		template<class T2,bool V2>
+		friend struct detail::set_refobject_base;
+
+	protected:
+		constexpr enable_shared_from_this() noexcept : _obj() {
+		}
+		enable_shared_from_this(enable_shared_from_this const& r) noexcept : _obj(r._obj) {
+		}
+		enable_shared_from_this& operator=(enable_shared_from_this const&) noexcept {
+			return *this;
+		}
+		~enable_shared_from_this() {
+		}
+	public:
+		/**
+		 * @return a shared_ptr for *this or an empty one if there is no existing shared_ptr.
+		 */
+		shared_ptr<T> shared_from_this() {
+			return shared_ptr<T>(_obj);
+		}
+		shared_ptr<T const> shared_from_this() const {
+			return shared_ptr<T>(_obj);
+		}
+
+	private:
+		detail::refobject<T> *_obj;
+	};
+
+	namespace detail {
+		// helper for set_refobject
+		template<class T,bool V>
+		struct set_refobject_base {
+			static void set(T *,refobject<T> *) {
+			}
+		};
+		template<class T>
+		struct set_refobject_base<T,true> {
+			static void set(T *obj,refobject<T> *refobj) {
+				enable_shared_from_this<T> *esft = static_cast<enable_shared_from_this<T>*>(obj);
+				esft->_obj = refobj;
+			}
+		};
+
+		// sets refobject<T>* only if enable_shared_from_this<T> is a base class of T.
+		template<class T>
+		struct set_refobject : public set_refobject_base<T,is_base_of<enable_shared_from_this<T>,T>::value> {
+		};
+
+		/**
+		 * Class for the management objects of shared_ptr and weak_ptr. Holds a reference count and
+		 * the pointer to the managed object.
+		 */
+		template<class T>
+		class refobject {
+		public:
+			explicit refobject(T *ptr_,long shared,long weak) noexcept
+				: shared_refs(shared), weak_refs(weak), ptr(ptr_) {
+			}
+
+			refobject(const refobject&) = delete;
+			refobject& operator=(const refobject&) = delete;
+
+			long shared_refs;
+			long weak_refs;
+			T *ptr;
+		};
+	}
+
+	/**
+	 * The standard shared pointer
+	 */
+	template<class T>
+	class shared_ptr {
+		template<class Y>
+		friend class shared_ptr;
+		template<class Y>
+		friend class weak_ptr;
+		template<class Y>
+		friend class enable_shared_from_this;
+
+	public:
+		typedef T element_type;
+
+		// 20.7.2.2.1, constructors:
+
+		/**
+		 * Creates an empty shared pointer
+		 */
+		constexpr shared_ptr() noexcept : _obj() {
+		}
+		/**
+		 * Creates a shared pointer to p. This has to be allocated on the heap!
+		 *
+		 * @param p the object or nullptr
+		 */
+		template<class Y>
+		explicit shared_ptr(Y* p) : _obj(p ? new detail::refobject<T>(p,1,0) : nullptr) {
+			detail::set_refobject<T>::set(p,_obj);
+		}
+
+		shared_ptr(const shared_ptr& r) noexcept : _obj(r._obj) {
+			attach();
+		}
+		template<class Y>
+		shared_ptr(const shared_ptr<Y>& r) noexcept : _obj((detail::refobject<T>*)r._obj) {
+			function_requires<is_convertible<Y*,T*>>();
+			attach();
+		}
+		shared_ptr(shared_ptr&& r) noexcept : _obj(r._obj) {
+			r._obj = nullptr;
+		}
+		template<class Y>
+		shared_ptr(shared_ptr<Y>&& r) noexcept : _obj((detail::refobject<T>*)r._obj) {
+			function_requires<is_convertible<Y*,T*>>();
+			r._obj = nullptr;
+		}
+		template<class Y>
+		explicit shared_ptr(const weak_ptr<Y>& r) : _obj((detail::refobject<T>*)r._obj) {
+			if(r.expired())
+				throw bad_weak_ptr();
+			function_requires<is_convertible<Y*,T*>>();
+			attach();
+		}
+		template<class Y>
+		shared_ptr(unique_ptr<Y>&& r)
+			: _obj(r.get() ? new detail::refobject<T>(r.release(),1,0) : nullptr) {
+		}
+
+		// 20.7.2.2.2, destructor:
+		~shared_ptr() {
+			detach();
+		}
+
+		// 20.7.2.2.3, assignment:
+		shared_ptr& operator=(const shared_ptr& r) noexcept {
+			if(_obj != r._obj) {
+				detach();
+				attachTo(r._obj);
+			}
+			return *this;
+		}
+		template<class Y>
+		shared_ptr& operator=(const shared_ptr<Y>& r) noexcept {
+			function_requires<is_convertible<Y*,T*>>();
+			if(_obj != (detail::refobject<T>*)r._obj) {
+				detach();
+				attachTo((detail::refobject<T>*)r._obj);
+			}
+			return *this;
+		}
+		shared_ptr& operator=(shared_ptr&& r) noexcept {
+			if(_obj != r._obj) {
+				detach();
+				_obj = r._obj;
+				r._obj = nullptr;
+			}
+			return *this;
+		}
+		template<class Y>
+		shared_ptr& operator=(shared_ptr<Y>&& r) noexcept {
+			function_requires<is_convertible<Y*,T*>>();
+			if(_obj != (detail::refobject<T>*)r._obj) {
+				detach();
+				_obj = (detail::refobject<T>*)r._obj;
+				r._obj = nullptr;
+			}
+			return *this;
+		}
+		template<class Y>
+		shared_ptr& operator=(unique_ptr<Y>&& r) {
+			detach();
+			_obj = r.get() ? new detail::refobject<T>(r.release(),1,0) : nullptr;
+			return *this;
+		}
+
+		// 20.7.2.2.4, modifiers:
+
+		/**
+		 * Exchanges *this with r
+		 */
+		void swap(shared_ptr& r) noexcept {
+			std::swap(_obj,r._obj);
+		}
+		/**
+		 * Resets this shared pointer to be empty.
+		 */
+		void reset() noexcept {
+			detach();
+		}
+		/**
+		 * Resets this shared pointer to point to p.
+		 *
+		 * @param p the object or nullptr
+		 */
+		template<class Y>
+		void reset(Y* p) {
+			shared_ptr(p).swap(*this);
+		}
+
+		// 20.7.2.2.5, observers:
+
+		/**
+		 * @return the managed object
+		 */
+		T* get() const noexcept {
+			return _obj ? _obj->ptr : nullptr;
+		}
+		T& operator*() const noexcept {
+			assert(get() != nullptr);
+			return *get();
+		}
+		T* operator->() const noexcept {
+			assert(get() != nullptr);
+			return get();
+		}
+
+		/**
+		 * @return the number of shared references
+		 */
+		long use_count() const noexcept {
+			return _obj ? _obj->shared_refs : 0;
+		}
+		/**
+		 * @return true if there is only one shared reference
+		 */
+		bool unique() const noexcept {
+			return use_count() == 1;
+		}
+		/**
+		 * @return true if this smart_ptr is not empty
+		 */
+		explicit operator bool() const noexcept {
+			return get() != nullptr;
+		}
+
+		template<class T2,class U>
+		friend shared_ptr<T2> static_pointer_cast(const shared_ptr<U>& r) noexcept;
+		template<class T2,class U>
+		friend shared_ptr<T2> dynamic_pointer_cast(const shared_ptr<U>& r) noexcept;
+		template<class T2,class U>
+		friend shared_ptr<T2> const_pointer_cast(const shared_ptr<U>& r) noexcept;
+
+	private:
+		shared_ptr(detail::refobject<T> *r) noexcept : _obj(r) {
+			attach();
+		}
+
+		void attach() {
+			if(_obj)
+				_obj->shared_refs++;
+		}
+		void attachTo(detail::refobject<T> *obj) {
+			_obj = obj;
+			attach();
+		}
+		void detach() {
+			if(_obj && --_obj->shared_refs == 0) {
+				delete _obj->ptr;
+				_obj->ptr = nullptr;
+				if(_obj->weak_refs == 0)
+					delete _obj;
+			}
+			_obj = nullptr;
+		}
+
+		detail::refobject<T> *_obj;
+	};
+
+	// 20.7.2.2.6, shared_ptr creation
+	template<class T,class ... Args>
+	inline shared_ptr<T> make_shared(Args&&... args) {
+		return shared_ptr<T>(new T(std::forward<Args...>(args...)));
+	}
+
+	// 20.7.2.2.7, shared_ptr comparisons:
+	template<class T,class U>
+	inline bool operator==(const shared_ptr<T>& a,const shared_ptr<U>& b) noexcept {
+		return a.get() == b.get();
+	}
+	template<class T,class U>
+	inline bool operator!=(const shared_ptr<T>& a,const shared_ptr<U>& b) noexcept {
+		return !(a == b);
+	}
+	template<class T,class U>
+	inline bool operator<(const shared_ptr<T>& a,const shared_ptr<U>& b) noexcept {
+		return a.get() < b.get();
+	}
+	template<class T,class U>
+	inline bool operator>(const shared_ptr<T>& a,const shared_ptr<U>& b) noexcept {
+		return a.get() > b.get();
+	}
+	template<class T,class U>
+	inline bool operator<=(const shared_ptr<T>& a,const shared_ptr<U>& b) noexcept {
+		return !(a > b);
+	}
+	template<class T,class U>
+	inline bool operator>=(const shared_ptr<T>& a,const shared_ptr<U>& b) noexcept {
+		return !(a < b);
+	}
+
+	// 20.7.2.2.8, shared_ptr specialized algorithms:
+	template<class T>
+	inline void swap(shared_ptr<T>& a,shared_ptr<T>& b) noexcept {
+		return a.swap(b);
+	}
+
+	// 20.7.2.2.9, shared_ptr casts:
+	template<class T,class U>
+	inline shared_ptr<T> static_pointer_cast(const shared_ptr<U>& r) noexcept {
+		function_requires<is_static_convertible<U*,T*>>();
+		shared_ptr<T> res;
+		res.attachTo((detail::refobject<T>*)r._obj);
+		return res;
+	}
+	template<class T,class U>
+	inline shared_ptr<T> dynamic_pointer_cast(const shared_ptr<U>& r) noexcept {
+		shared_ptr<T> res;
+		T *t;
+		if(r && (t = dynamic_cast<T*>(r.get())))
+			res.attachTo((detail::refobject<T>*)r._obj);
+		return res;
+	}
+	template<class T,class U>
+	inline shared_ptr<T> const_pointer_cast(const shared_ptr<U>& r) noexcept {
+		function_requires<is_const_convertible<U*,T*>>();
+		shared_ptr<T> res;
+		res.attachTo((detail::refobject<T>*)r._obj);
+		return res;
+	}
+
+	// 20.7.2.2.11, shared_ptr I/O:
+	template<class Y>
+	inline ostream& operator<<(ostream& os,const shared_ptr<Y>& p) {
+		os << p.get();
+		return os;
+	}
+
+	/**
+	 * The standard weak_ptr
+	 */
+	template<class T>
+	class weak_ptr {
+		template<class Y>
+		friend class weak_ptr;
+		template<class Y>
+		friend class shared_ptr;
+
+	public:
+		typedef T element_type;
+
+		// 20.7.2.3.1, constructors
+
+		/**
+		 * Creates an empty weak pointer
+		 */
+		constexpr weak_ptr() noexcept : _obj() {
+		}
+
+		/**
+		 * Creates a weak pointer from the given shared pointer
+		 *
+		 * @param r the shared pointer
+		 */
+		template<class Y>
+		weak_ptr(shared_ptr<Y> const& r) noexcept : _obj((detail::refobject<T>*)r._obj) {
+			function_requires<is_convertible<Y*,T*>>();
+			attach();
+		}
+		weak_ptr(weak_ptr const& r) noexcept : _obj(r._obj) {
+			attach();
+		}
+		template<class Y>
+		weak_ptr(weak_ptr<Y> const& r) noexcept : _obj((detail::refobject<T>*)r._obj) {
+			function_requires<is_convertible<Y*,T*>>();
+			attach();
+		}
+
+		// 20.7.2.3.2, destructor
+		~weak_ptr() {
+			detach();
+		}
+
+		// 20.7.2.3.3, assignment
+		weak_ptr& operator=(weak_ptr const& r) noexcept {
+			detach();
+			_obj = r._obj;
+			attach();
+			return *this;
+		}
+		template<class Y>
+		weak_ptr& operator=(weak_ptr<Y> const& r) noexcept {
+			function_requires<is_convertible<Y*,T*>>();
+			detach();
+			_obj = (detail::refobject<T>*)r._obj;
+			attach();
+			return *this;
+		}
+		template<class Y>
+		weak_ptr& operator=(shared_ptr<Y> const& r) noexcept {
+			function_requires<is_convertible<Y*,T*>>();
+			detach();
+			_obj = (detail::refobject<T>*)r._obj;
+			attach();
+			return *this;
+		}
+
+		// 20.7.2.3.4, modifiers
+
+		/**
+		 * Exchanges *this with r
+		 */
+		void swap(weak_ptr& r) noexcept {
+			std::swap(_obj,r._obj);
+		}
+		/**
+		 * Resets this weak pointer to be empty.
+		 */
+		void reset() noexcept {
+			detach();
+		}
+
+		// 20.7.2.3.5, observers
+		/**
+		 * @return the number of shared references
+		 */
+		long use_count() const noexcept {
+			return _obj ? _obj->shared_refs : 0;
+		}
+		/**
+		 * @return true if there are no shared references anymore and thus, the managed object has
+		 * 	already been destroyed (or this weak_ptr was always empty)
+		 */
+		bool expired() const noexcept {
+			return use_count() == 0;
+		}
+		/**
+		 * Creates a shared_ptr for the managed object so that you can work with it.
+		 *
+		 * @return the shared_ptr. empty, if this weak_ptr is expired.
+		 */
+		shared_ptr<T> lock() const noexcept {
+			return expired() ? shared_ptr<T>() : shared_ptr<T>(*this);
+		}
+
+	private:
+		void attach() {
+			if(_obj)
+				_obj->weak_refs++;
+		}
+		void detach() {
+			if(_obj && --_obj->weak_refs == 0) {
+				if(_obj->shared_refs == 0)
+					delete _obj;
+			}
+			_obj = nullptr;
+		}
+
+		detail::refobject<T> *_obj;
+	};
+
+	// 20.7.2.3.6, specialized algorithms
+	template<class T>
+	void swap(weak_ptr<T>& a, weak_ptr<T>& b) noexcept {
+		a.swap(b);
+	}
+}

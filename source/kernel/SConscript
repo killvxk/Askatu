@@ -1,0 +1,102 @@
+# -*- Mode: Python -*-
+
+Import('env')
+import os
+
+kenv = env.Clone()
+gensyms = Builder(action = './tools/gensymbols.sh $SOURCE > $TARGET')
+objcpy = Builder(action = '$CROSSDIR/bin/$CROSS-objcopy -O elf32-i386 $SOURCE $TARGET')
+preproc = Builder(action = '$CROSSDIR/bin/$CROSS-cpp -P $CPPFLAGS -Ikernel/include $SOURCE $TARGET')
+kenv.Append(
+	BUILDERS = {
+		'GenSyms' : gensyms,
+		'ObjCpy' : objcpy,
+		'PreProc' : preproc
+	}
+)
+
+ldconfs = Flatten([kenv.Glob('src/arch/$TGTTYPE/ld.conf'), kenv.Glob('src/arch/$TGT/ld.conf')])
+ldconf = kenv.PreProc('ld.conf', ldconfs[0])
+
+kenv.Append(
+	CFLAGS = ' -ffreestanding',
+	CXXFLAGS = ' -std=c++0x -fno-exceptions -fno-rtti -ffreestanding',
+	CPPFLAGS = ' -DIN_KERNEL=1',
+	LINKFLAGS = ' -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wl,-T,' + ldconf[0].abspath,
+	CPPPATH = ['include']
+)
+
+if kenv['TGTTYPE'] == 'x86':
+	kenv.Append(
+		CFLAGS = ' -msoft-float',
+		CXXFLAGS = ' -msoft-float'
+	)
+if kenv['TGT'] == 'x86_64':
+	kenv.Append(
+		CFLAGS = ' -mcmodel=kernel -mno-red-zone -mno-sse',
+		CXXFLAGS = ' -mcmodel=kernel -mno-red-zone -mno-sse',
+		ASFLAGS = ' -mcmodel=kernel -mno-red-zone',
+		LINKFLAGS = ' -mcmodel=kernel -mno-red-zone',
+	)
+
+#kenv.Append(
+#	CPPFLAGS = ' -D ASK_PROFILE=1 -finstrument-functions -finstrument-functions-exclude-file-list='	+
+#		'ksymbols.cc,src/arch/i586/gdt.cc,src/basic/arch/$TGT/profile.c'
+#)
+
+src = [kenv.Glob('src/arch/$TGT/kernel.S'), kenv.Glob('src/arch/$TGTTYPE/kernel.S')]
+src += [kenv.Glob('src/*.c'), kenv.Glob('src/*/*.c')]
+src += [f for f in kenv.Glob('src/*.cc') if 'start.cc' not in str(f)]
+src += [kenv.Glob('src/*/*.cc')]
+src += [f for f in kenv.Glob('src/*/*/*.c') if 'arch/' not in str(f)]
+src += [f for f in kenv.Glob('src/*/*/*.cc') if 'arch/' not in str(f)]
+src += [kenv.Glob('src/arch/$TGT/*.cc')]
+src += [kenv.Glob('src/arch/$TGT/*/*.cc'), kenv.Glob('src/arch/$TGT/*/*/*.cc')]
+src += [kenv.Glob('src/arch/$TGTTYPE/*.cc')]
+src += [kenv.Glob('src/arch/$TGTTYPE/*/*.cc'), kenv.Glob('src/arch/$TGTTYPE/*/*/*.cc')]
+src += [kenv.Glob('src/basic/arch/$TGT/*.c'), kenv.Glob('src/basic/arch/$TGTTYPE/*.c')]
+src += [kenv.Glob('src/basic/arch/$TGT/*.S')]
+src += [f for f in kenv.Glob('src/arch/$TGTTYPE/*.S') if 'kernel.S' not in str(f)]
+src += [f for f in kenv.Glob('src/arch/$TGT/*.S') if 'kernel.S' not in str(f)]
+src += [kenv.Glob('src/arch/$TGT/*/*.S'), kenv.Glob('src/arch/$TGTTYPE/*/*.S')]
+tsrc = [
+	kenv.Glob('test/*.cc'), kenv.Glob('test/arch/$TGT/*.cc'), kenv.Glob('test/arch/$TGTTYPE/*.cc')
+]
+mainsrc = 'src/start.cc'
+
+# works around the problem that we use those sources for two programs. this way, we isolate each
+# source file in its own environment
+def objects(env, srcs):
+    return [env.Object(src) for src in srcs]
+
+def LinkWithSymbols(kenv, name, objects):
+	# generate empty symbol file
+	kenv.GenSyms(name + 'ksyms1.cc', kenv.Value('-'))
+	kenv.Object(name + 'ksyms1.o', name + 'ksyms1.cc')
+	# build the kernel with it
+	prekernel = kenv.AskatuCProg(
+		prefix = '', target = 'pre' + name, source = objects + [name + 'ksyms1.o'],
+		force_static = True, var_addr = False, LIBS = ['gcc']
+	)
+	kenv.Depends(prekernel, ldconf)
+
+	# generate symbol file for built kernel
+	kenv.GenSyms(name + 'ksyms2.cc', prekernel)
+	kenv.Object(name + 'ksyms2.o', name + 'ksyms2.cc')
+	# now build the real kernel
+	kernel = kenv.AskatuCProg(
+		prefix = 'boot', target = name, source = objects + [name + 'ksyms2.o'],
+		force_static = True, var_addr = False, LIBS = ['gcc']
+	)
+	kenv.Depends(kernel, ldconf)
+	return kernel
+
+kernel = LinkWithSymbols(kenv, 'askatu', objects(kenv, src + [mainsrc]))
+test_kernel = LinkWithSymbols(kenv, 'askatu_test', objects(kenv, src + tsrc))
+
+if kenv['TGT'] == 'x86_64':
+	kenv.ObjCpy('askatu.elf32', kernel)
+	kenv.ObjCpy('askatu_test.elf32', test_kernel)
+	kenv.Install('$DISTDIR/boot', ['askatu.elf32', 'askatu_test.elf32'])
+	kenv.Symlink('$BINDIR/askatu.elf32', 'askatu.elf32')
+	kenv.Symlink('$BINDIR/askatu_test.elf32', 'askatu_test.elf32')

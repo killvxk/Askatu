@@ -1,0 +1,6 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCXXProg(
+	'bin', target = 'gtest', source = env.Glob('*.cc'), LIBS = ['gui']
+)

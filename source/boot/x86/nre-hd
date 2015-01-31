@@ -1,0 +1,7 @@
+#!/bin/sh
+DST=$HOME/nova/nre/nre/dist/imgs
+. boot/$ASK_TGTTYPE/images.sh
+create_disk $1/dist $1/hd.img
+cp $1/hd.img $DST/askatu-hd.img
+cp $1/dist/sbin/pci $DST/askatu_pci.bin
+cp $1/dist/sbin/ata $DST/askatu_ata.bin

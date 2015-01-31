@@ -1,0 +1,11 @@
+#!/bin/sh
+. boot/images.sh
+
+gimmix=../gimmix
+gimsim=$gimmix/build/gimmix
+gimmon=$gimmix/build/tests/manual/hexmon.rom
+
+create_ecommix_disk $1 $1/hd.img
+
+$gimsim -r $gimmon -o log.txt -m 128 -c -t 1 -i --script=boot/$ASK_TARGET/gimmix.start \
+	-d $1/hd.img -b -s $1/map/askatu.map $2

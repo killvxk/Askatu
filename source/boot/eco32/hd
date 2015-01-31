@@ -1,0 +1,10 @@
+#!/bin/sh
+. boot/images.sh
+
+eco32=../eco32
+ecosim=$eco32/build/bin/sim
+ecomon=$eco32/build/monitor/monitor.bin
+
+create_ecommix_disk $1 $1/hd.img
+
+$ecosim -r $ecomon -o log.txt -m 64 -c -t 1 -i -s $1/map/askatu.map -n -d $1/hd.img $2

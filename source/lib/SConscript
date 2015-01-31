@@ -1,0 +1,15 @@
+# -*- Mode: Python -*-
+
+Import('env')
+
+def isIgnored(list, name):
+	for i in list:
+		if "/" + i + "/" in name:
+			return True
+	return False
+
+if env['TGT'] == 'eco32' or env['TGT'] == 'mmix':
+	env.SConscript([f for f in env.Glob('*/SConscript')
+					if 'basic' not in str(f) and 'vbe' not in str(f)], 'env')
+else:
+	env.SConscript([f for f in env.Glob('*/SConscript') if 'basic' not in str(f)], 'env')

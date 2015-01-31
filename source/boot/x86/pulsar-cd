@@ -1,0 +1,16 @@
+#!/bin/sh
+. boot/$ASK_TGTTYPE/images.sh
+create_mini_cd $1/dist $1/cd-mini.iso 0
+
+cat >$1/config-$ASK_MAC <<EOF
+root askatu
+exec boot/askatu root=/dev/iso9660-cdrom
+load /bin/initloader
+load sbin/pci /dev/pci
+load sbin/ata /sys/devices/ata nodma
+load sbin/iso9660 /dev/iso9660-cdrom cdrom
+EOF
+
+files="boot/askatu bin/initloader sbin/iso9660 sbin/ata sbin/pci"
+( cd $1/dist && rsync --progress -RLp $files $ASK_SERVER/askatu )
+( cd $1 && rsync --progress -RLp config-$ASK_MAC $ASK_SERVER )

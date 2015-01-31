@@ -1,0 +1,6 @@
+# -*- Mode: Python -*-
+
+Import('hostenv')
+
+prog = hostenv.Program('hostconv', hostenv.Glob('*.cc'))
+hostenv.Install('$BINDIR', prog)

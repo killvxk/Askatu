@@ -1,0 +1,38 @@
+{
+	"folders":
+	[
+		{
+			"path": "/home/hrniels/askatu/source"
+		}
+	],
+    "settings":
+    {
+        "translate_tabs_to_spaces": false,
+        "sublimeclang_additional_language_options":
+        {
+            "c++" : ["-std=c++11"],
+            "c": ["-std=c99"]
+        },
+        "sublimeclang_options":
+        [
+            "-I/home/hrniels/askatu/source/include",
+            "-I/home/hrniels/askatu/source/include/cpp",
+            "-I/home/hrniels/askatu/source/kernel/include",
+            "-I/home/hrniels/askatu/source/drivers/x86/video/x86emu",
+            "-I/opt/askatu-cross-i586/include/c++/4.8.2",
+            "-I/opt/askatu-cross-i586/include/c++/4.8.2/i586-elf-askatu",
+            "-D__x86__",
+            "-D__i586__",
+            "-DIN_KERNEL",
+            "-target",
+            "i686-linux-gnu",
+            "-march=i686",
+            "-Wall",
+            "-Wextra",
+            "-ansi",
+            "-Wpointer-arith",
+            "-Wmissing-prototypes",
+            "-ferror-limit=0"
+        ]
+    }
+}

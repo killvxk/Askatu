@@ -1,0 +1,4 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCXXProg('sbin', target = 'video', source = env.Glob('*.cc'), LIBS = ['gui'])

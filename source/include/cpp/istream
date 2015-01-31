@@ -1,0 +1,380 @@
+// -*- C++ -*-
+/**
+ * $Id$
+ * Copyright (C) 2008 - 2014 Nils Asmussen
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#pragma once
+
+#include <stddef.h>
+#include <impl/streams/ios.h>
+#include <impl/streams/ios_base.h>
+#include <stdio.h>
+#include <ctype.h>
+
+namespace std {
+	/**
+	 * The basic input-stream that provides formated- and unformated-input-methods.
+	 */
+	class istream: virtual public ios {
+	public:
+		typedef ios::char_type char_type;
+		typedef ios::int_type int_type;
+		typedef ios::size_type size_type;
+		typedef int esc_type;
+
+		/**
+		 * Constructs an object of class istream with given stream-buffer
+		 */
+		explicit istream(streambuf* sb)
+			: _lastcount(0), _sb(sb) {
+			ios::init(sb);
+		}
+		/**
+		 * Destructor. Does not perform any operations of rdbuf().
+		 */
+		virtual ~istream() {
+		}
+
+		/**
+		 * For pre- and post-operations
+		 */
+		class sentry {
+		public:
+			/**
+			 * If is.good() is true, prepares for formatted or unformatted input. If desired the
+			 * function extracts and discards whitespace-characters
+			 */
+			explicit sentry(istream& is,bool noskipws = false);
+			/**
+			 * Does nothing
+			 */
+			~sentry() {
+			}
+			/**
+			 * @return whether everything is ok
+			 */
+			operator bool() const {
+				return _ok;
+			}
+		private:
+			sentry(const sentry &); // not defined
+			sentry & operator =(const sentry &); // not defined
+
+		private:
+			bool _ok;
+		};
+
+		/**
+		 * Calls pf(*this) and returns *this
+		 */
+		istream& operator >>(istream& (*pf)(istream&)) {
+			pf(*this);
+			return *this;
+		}
+		istream& operator >>(ios& (*pf)(ios&)) {
+			pf(*this);
+			return *this;
+		}
+		istream& operator >>(ios_base & (*pf)(ios_base &)) {
+			pf(*this);
+			return *this;
+		}
+
+		/**
+		 * Reads an integer or floating-point-number from the stream into the given integer-
+		 * or floating-point-variable.
+		 * Sets ios_base::badbit if something went wrong and ios_base::eofbit if EOF has been
+		 * reached. This may throw an exception (depending on ios::exceptions())
+		 *
+		 * @param n the integer to write into
+		 * @param f the floating-point-number to write into
+		 * @param p the pointer to write into
+		 * @return *this
+		 */
+		istream& operator >>(bool& n);
+		istream& operator >>(short& n) {
+			readInteger(n,true);
+			return *this;
+		}
+		istream& operator >>(unsigned short& n) {
+			readInteger(n,false);
+			return *this;
+		}
+		istream& operator >>(int& n) {
+			readInteger(n,true);
+			return *this;
+		}
+		istream& operator >>(unsigned int& n) {
+			readInteger(n,false);
+			return *this;
+		}
+		istream& operator >>(long& n) {
+			readInteger(n,true);
+			return *this;
+		}
+		istream& operator >>(unsigned long& n) {
+			readInteger(n,false);
+			return *this;
+		}
+		istream& operator >>(long long& n) {
+			readInteger(n,true);
+			return *this;
+		}
+		istream& operator >>(unsigned long long& n) {
+			readInteger(n,false);
+			return *this;
+		}
+		/* TODO
+		 * istream& operator >>(float& f);
+		istream& operator >>(double& f);
+		istream& operator >>(long double& f);
+		istream& operator >>(void*& p);*/
+
+		/**
+		 * Extracts characters and stores them into the given streambuffer. The method stops
+		 * if EOF occurrs, inserting fails or an exception occurs.
+		 *
+		 * @param sb the streambuffer
+		 * @return *this
+		 */
+		// TODO istream& operator >>(streambuf* sb);
+
+		/**
+		 * @return the number of characters extracted by the last unformatted input member
+		 * 	function called for the object.
+		 */
+		size_type lastcount() const {
+			return _lastcount;
+		}
+		/**
+		 * Extracts a character c, if one is available. Otherwise, the function calls
+		 * setstate(failbit), which may throw ios_base::failure.
+		 *
+		 * @return c if available, otherwise traits::eof().
+		 */
+		char_type get();
+		/**
+		 * @return get(s ,n ,widen('\n'))
+		 */
+		istream& get(char_type* s,size_type n) {
+			return get(s,n,'\n');
+		}
+		/**
+		 * Extracts characters and stores them into successive locations of an array whose first
+		 * element is designated by <s>. The method stops if <n>-1 characters are stored, EOF occurrs
+		 * or <delim> is found.
+		 * If the function stores no characters, it calls setstate(failbit) (which may throw
+		 * ios_base::failure). In any case, it then stores a null character into the next
+		 * successive location of the array.
+		 *
+		 * @return *this
+		 */
+		istream& get(char_type* s,size_type n,char_type delim);
+		/**
+		 * @return get(sb , widen('\n'))
+		 */
+		istream& get(streambuf& sb) {
+			return get(sb,'\n');
+		}
+		/**
+		 * Extracts characters and inserts them in the output sequence controlled by <sb>. The method
+		 * stops if inserting fails, EOF is reached, an exception occurs or <delim> is found.
+		 * If the function inserts no characters, it calls setstate(failbit), which may throw
+		 * ios_base::failure. Note that <delim> is NOT extracted and NOT stored!
+		 *
+		 * @return *this
+		 */
+		istream& get(streambuf& sb,char_type delim);
+		/**
+		 * Reads and extracts characters until either EOF is reached, an error occurrs or a
+		 * whitespace-character is found. If width() is not 0, it stops when width() is reached.
+		 * In any case, <s> is terminated by a null-character
+		 *
+		 * @param s the string to store the characters in
+		 * @return *this
+		 */
+		istream& getword(char_type* s);
+		/**
+		 * Reads and extracts characters until either EOF is reached, an error occurrs or a
+		 * whitespace-character is found. If width() is not 0, it stops when width() is reached.
+		 *
+		 * @param sb the streambuffer
+		 * @return *this
+		 */
+		istream& getword(streambuf& sb);
+		/**
+		 * @return getline(s ,n ,widen('\n'))
+		 */
+		istream& getline(char_type* s,size_type n) {
+			return getline(s,n,'\n');
+		}
+		/**
+		 * Extracts characters and stores them into successive locations of an array whose first
+		 * element is designated by <s>. The method stops if <n>-1 characters are stored, EOF is
+		 * reached, or <delim> is found.
+		 * If the function extracts no characters, it calls setstate(failbit) (which may throw
+		 * ios_base::failure). In any case, it then stores a null character into the next
+		 * successive location of the array.
+		 * Note that <delim> is extracted but NOT stored!
+		 *
+		 * @return *this
+		 */
+		istream& getline(char_type* s,size_type n,char_type delim);
+		istream& getline(string& s,char_type delim);
+		istream& getline(streambuf& sb,char_type delim);
+		/**
+		 * Extracts characters and discards them until <n> characters have been discarded (n =
+		 * numeric_limits<streamsize>::max() means unlimited) or EOF is reached or <delim>
+		 * is found. Note that <delim> is extracted!
+		 *
+		 * @return *this
+		 */
+		istream& ignore(size_type n = 1,char_type delim = EOF);
+		/**
+		 * Reads an escape-code from the stream. Assumes that the last read char was '\033'.
+		 *
+		 * @param n1 will be set to the first argument (ESCC_ARG_UNUSED if unused)
+		 * @param n2 will be set to the second argument (ESCC_ARG_UNUSED if unused)
+		 * @param n3 will be set to the third argument (ESCC_ARG_UNUSED if unused)
+		 * @return the scanned escape-code (ESCC_*)
+		 */
+		esc_type getesc(esc_type& n1,esc_type& n2,esc_type& n3);
+		/**
+		 * Reads but does not extract the current input character.
+		 *
+		 * @return traits::eof() if good() is false. Otherwise the character
+		 */
+		char_type peek();
+		/**
+		 * Moves the stream one position back
+		 *
+		 * @return *this
+		 */
+		istream& unget();
+		/**
+		 * Behaves as an unformatted input function, except that it does not count the number
+		 * of characters extracted and does not affect the value returned by subsequent calls to
+		 * gcount(). After constructing a sentry object, if rdbuf() is a null pointer,
+		 * returns -1 . Otherwise, calls rdbuf()->pubsync() and, if that function returns
+		 * -1 calls setstate(badbit) (which may throw ios_base::failure, and returns -1.
+		 * Otherwise, returns zero.
+		 */
+		int sync();
+
+	private:
+		template<class T>
+		void readInteger(T &n,bool sign) {
+			sentry se(*this,false);
+			if(se) {
+				bool neg = false;
+				try {
+					int base = ios_base::get_base();
+
+					// handle '-'
+					if(sign) {
+						char_type rc = _sb->peek();
+						if(rc == EOF) {
+							ios::setstate(ios_base::eofbit);
+							goto done;
+						}
+						if(rc == '-') {
+							neg = true;
+							_sb->get();
+						}
+					}
+
+					// read until an invalid char is found or the max length is reached
+					n = 0;
+					int remain = ios_base::width();
+					if(remain == 0)
+						remain = -1;
+					while(remain < 0 || remain-- > 0) {
+						char_type tc = _sb->get();
+						if(tc == EOF) {
+							ios::setstate(ios_base::eofbit);
+							break;
+						}
+						tc = tolower(tc);
+						if((base <= 10 && isdigit(tc)) || (base <= 16 && isxdigit(tc))) {
+							if(base > 10 && tc >= 'a')
+								n = n * base + (10 + tc - 'a');
+							else
+								n = n * base + (tc - '0');
+						}
+						else {
+							_sb->unget();
+							break;
+						}
+					}
+				}
+				catch(...) {
+					ios::setstate(ios_base::badbit);
+				}
+				done:
+				if(neg)
+					n = -n;
+				ios_base::width(0);
+			}
+		}
+
+		bool readAlphaBool();
+		bool readString(const char *exp);
+
+	private:
+		size_type _lastcount;
+		streambuf* _sb;
+	};
+
+	/**
+	 * Discards whitespace
+	 *
+	 * @param is the stream
+	 * @return is
+	 */
+	inline istream& ws(istream& is) {
+		istream::sentry se(is,false);
+		return is;
+	}
+
+	/**
+	 * Reads and extracts the current character and stores it into <c>
+	 *
+	 * @param in the stream
+	 * @param c the reference to the character
+	 * @return in
+	 */
+	inline istream& operator >>(istream& in,char& c) {
+		ws(in);
+		c = in.get();
+		return in;
+	}
+
+	/**
+	 * Reads and extracts characters until either EOF is reached, an error occurrs or a
+	 * whitespace-character is found. If width() is not 0, it stops when width() is reached.
+	 * In any case, <s> is terminated by a null-character
+	 *
+	 * @param in the stream
+	 * @param s the string to store the characters in
+	 * @return *this
+	 */
+	inline istream& operator >>(istream& in,char* s) {
+		ws(in);
+		return in.getword(s);
+	}
+}

@@ -1,0 +1,6 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCXXProg(
+	'sbin', target = 'ramdisk', source = env.Glob('*.cc'), force_static = True
+)

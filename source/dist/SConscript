@@ -1,0 +1,17 @@
+# -*- Mode: Python -*-
+
+Import('env')
+
+if env['TGTTYPE'] == 'x86':
+	env.Install('$DISTDIR/lib', '$CROSSDIR/$CROSS/lib/libgcc_s.so.1')
+	env.Install('$BINDIR', '$CROSSDIR/$CROSS/lib/libgcc_s.so.1')
+env.InstallFiles('$DISTDIR', 'arch/$TGT', scan=1)
+env.InstallFiles('$DISTDIR', 'arch/$TGTTYPE', scan=1)
+env.InstallFiles('$DISTDIR/etc', 'etc', scan=1)
+env.InstallFiles('$DISTDIR/home', 'home', scan=1)
+env.InstallFiles('$DISTDIR/root', 'root', scan=1)
+env.Execute("mkdir -p $DISTDIR/dev")
+env.Execute("mkdir -p $DISTDIR/sys")
+env.Execute("mkdir -p $DISTDIR/mnt")
+
+env.Command('zeros', '/bin/dd', '$SOURCE if=/dev/zero of=$TARGET bs=1024 count=2048')

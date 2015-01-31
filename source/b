@@ -1,0 +1,316 @@
+#!/bin/sh
+
+# config
+if [ -f /proc/cpuinfo ]; then
+	cpus=`cat /proc/cpuinfo | grep '^processor[[:space:]]*:' | wc -l`
+else
+	cpus=1
+fi
+opts="-j$cpus"
+
+# fall back to some reasonable defaults for the Askatu environment variables
+if [ -z "$ASK_TARGET" ]; then
+	export ASK_TARGET=i586
+fi
+if [ "$ASK_BUILD" != "debug" ]; then
+	export ASK_BUILD="release"
+fi
+if [ -z "$ASK_SERVER" ]; then
+	export ASK_SERVER=/var/lib/tftpboot
+fi
+if [ -z "$ASK_MAC" ]; then
+	export ASK_MAC="52-54-00-12-34-56"
+fi
+if [ -z "$ASK_GDB_X86" ]; then
+	export ASK_GDB_X86="gdb --tui"
+fi
+if [ -z "$ASK_GDB_MMIX" ]; then
+	export ASK_GDB_MMIX="/opt/mmix/bin/mmix-gdbtui"
+fi
+if [ -z "$ASK_QEMU" ]; then
+	export ASK_QEMU=qemu-system-i386
+fi
+
+# target dependend values
+cross="$ASK_TARGET-elf-askatu"
+crossdir="/opt/askatu-cross-$ASK_TARGET"
+
+if [ "$ASK_TARGET" = "i586" ]; then
+	gdb=$ASK_GDB_X86
+	export ASK_TGTTYPE=x86
+elif [ "$ASK_TARGET" = "x86_64" ]; then
+	gdb=$ASK_GDB_X86
+	export ASK_QEMU=qemu-system-x86_64
+	export ASK_TGTTYPE=x86
+elif [ "$ASK_TARGET" = "eco32" ]; then
+	gdb=""
+	export ASK_TGTTYPE=ecommix
+elif [ "$ASK_TARGET" = "mmix" ]; then
+	gdb=$ASK_GDB_MMIX
+	export ASK_TGTTYPE=ecommix
+else
+	echo 'Please define $ASK_TARGET to i586, x86_64, eco32 or mmix!' >&2
+	exit 1
+fi
+
+# determine linktype
+if [ "$ASK_LINKTYPE" != "static" ]; then
+	if [ "$ASK_TGTTYPE" = "x86" ]; then
+		ASK_LINKTYPE=dynamic
+	else
+		ASK_LINKTYPE=static
+	fi
+fi
+
+build="build/$ASK_TARGET-$ASK_BUILD"
+root=$(dirname $(readlink -f $0))
+
+help() {
+	echo "Usage: $1 [<cmd> <arg>] [--no-build|-n]"
+	echo ""
+	echo "This is a convenience script that is responsible for building everything"
+	echo "and running the specified command afterwards. The most important environment"
+	echo "variables that influence its behaviour are ASK_BUILD=(debug|release) and"
+	echo "ASK_TARGET=(i586|x86_64|eco32|mmix)."
+	echo "You can also prevent the script from building everything by specifying -n or"
+	echo "--no-build. In this case, only the specified command is executed."
+	echo ""
+	echo "The following commands are available:"
+	echo "    clean:                   do a clean in Askatu"
+	echo "    distclean:               remove all build-dirs"
+	echo "    run <script>:            run <script>. The script is expected to be in"
+	echo "                             boot/\$ASK_TARGET/."
+	echo "    dbg=<prog> <script>:     run <script> and remote-debug <prog> in gdb"
+	echo "    dis=<prog>:              run objdump -SC <prog> (the cross-compiler version)"
+	echo "    elf=<prog>:              run readelf -a <prog> (the cross-compiler version)"
+	echo "    nm=<prog>:               run nm -SC <prog> (the cross-compiler version)"
+	echo "    nms=<prog>:              run nm -SC --size-sort <prog> (the cross-compiler"
+	echo "                             version)"
+	echo "    constr=<prog>:           list the contructor calls of <prog>"
+	echo "    straddr=<prog> <str>:    search for the string <str> in <prog> and display"
+	echo "                             the addresses"
+	echo "    list:                    list the link-address of all programs"
+	echo ""
+	echo "Environment variables:"
+	echo "    ASK_TARGET:              the target architecture. Either i586, x86_64,"
+	echo "                             eco32 or mmix. The default is i586."
+	echo "    ASK_BUILD:               the build-type. Either debug or release. In debug"
+	echo "                             mode optimizations are disabled, debug infos are"
+	echo "                             available and assertions are active. In release"
+	echo "                             mode all that is disabled. The default is release."
+	echo "    ASK_SERVER:              the host and directory of your tftp-server which"
+	echo "                             is used for network booting. The default is"
+	echo "                             localhost:/var/lib/tftpboot."
+	echo "    ASK_MAC:                 the MAC address of the real machine for which to"
+	echo "                             write the pulsar config for. The default is"
+	echo "                             52-54-00-12-34-56."
+	echo "    ASK_GDB_X86:             the executable of gdb to use for i586 and x86_64."
+	echo "                             The default is 'gdb --tui'."
+	echo "    ASK_GDB_MMIX:            the executable of gdb to use for ASK_TARGET=mmix."
+	echo "                             The default is /opt/mmix/bin/mmix-gdbtui."
+	echo "    ASK_QEMU:                The qemu executable to use (default is"
+	echo "                             qemu-system-i386 for i586 and qemu-system-x86_64"
+	echo "                             for x86_64.)."
+	echo "    ASK_SIM_FLAGS:           Pass additional arguments to qemu/gimmix/eco32."
+	exit 0
+}
+
+# parse arguments
+dobuild=true
+cmd=""
+script=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-h|-\?|--help)
+			help $0
+			;;
+
+		-n|--no-build)
+			dobuild=false
+			;;
+
+		*)
+			if [ "$cmd" = "" ]; then
+				cmd="$1"
+			elif [ "$script" = "" ]; then
+				script="$1"
+			else
+				echo "Too many arguments" >&2
+				exit 1
+			fi
+			;;
+	esac
+	shift
+done
+
+binary=""
+case "$cmd" in
+	# check parameters
+	run)
+		if [ "$script" = "" ]; then
+			echo "Usage: $0 $cmd <script>" >&2
+			exit 1
+		fi
+		;;
+
+	straddr=*|dis=*|elf=*|constr=*|nm=*|nms=*|dbg=*)
+		if [ "`echo $cmd | grep '^straddr='`" != "" ] && [ "$script" = "" ]; then
+			echo "Usage: $0 $cmd <string>" >&2
+			exit 1
+		fi
+		binary=${cmd#*=}
+		;;
+
+	# for clean and distclean, it makes no sense to build it (this might even fail because e.g. scons has
+	# a non existing dependency which might be the reason the user wants to do a clean)
+	clean|distclean)
+		dobuild=false
+		;;
+
+	# check for unknown commands
+	list)
+		;;
+
+	?*)
+		echo "Unknown command '$cmd'" >&2
+		exit 1
+		;;
+esac
+
+echo "Working with $ASK_TARGET in $ASK_BUILD mode, using $ASK_LINKTYPE linking"
+
+if $dobuild; then
+	echo "Building Askatu with $cpus jobs..."
+	scons $opts || exit 1
+fi
+
+# after building, check whether the requested binary really exists
+if [ "${cmd#*,}" = "$cmd" ] && [ "$binary" != "" ]; then
+    if [ ! -f "$build/bin/$binary" ]; then
+        echo "The file $build/bin/$binary does not exist" >&2
+        exit 1
+    fi
+fi
+
+bootscript() {
+	if [ -f ./boot/$ASK_TARGET/$script ]; then
+		echo ./boot/$ASK_TARGET/$script
+	elif [ -f ./boot/$ASK_TGTTYPE/$script ]; then
+		echo ./boot/$ASK_TGTTYPE/$script
+	else
+		echo "Script '$script' not found in any boot-directory." 1>&2
+		exit 1
+	fi
+}
+
+# run the specified command, if any
+case "$cmd" in
+	clean)
+		scons -c
+		;;
+
+	distclean)
+		rm -Rf build/*
+		;;
+
+	run)
+		`bootscript $script` $build "$ASK_SIM_FLAGS"
+		;;
+
+	dbg=*)
+		if [ "$ASK_TGTTYPE" = "x86" ]; then
+			# the problem is that qemu terminates if it receives SIGINT. so, if we want to
+			# interrupt the execution and examine the state in gdb by pressing ^C, qemu
+			# terminates. to prevent that we use a small program (ignoreint) no block SIGINT,
+			# which replaces itself with the given program afterwards
+			$build/tools/ignoreint/ignoreint `bootscript $script` $build \
+				"$ASK_SIM_FLAGS -S -s" >log.txt &
+			# kill qemu when we're done
+			trap "pgrep qemu | xargs kill 2>/dev/null" INT
+		elif [ "$ASK_TARGET" = "eco32" ]; then
+			echo "Sorry, a gdb is not available for eco32" >&2
+			exit 1
+		else
+			`bootscript $script` $build \
+				"$ASK_SIM_FLAGS -s $build/map/$binary.map -p 1234" >log.txt &
+		fi
+
+		# wait until the simulator listens on port 1234
+		while [ "`lsof -i :1234 | grep LISTEN`" = "" ]; do
+			sleep 1
+		done
+
+		# run gdb
+		tmp=$(mktemp)
+		echo "target remote localhost:1234" >> $tmp
+		echo "display/i \$pc" >> $tmp
+
+		# add all symbol-files
+		oIFS=$IFS
+		IFS=","
+		first=""
+		for bin in $binary; do
+			if [ "$first" = "" ]; then
+				first=$build/bin/$bin
+			else
+				addr=`$crossdir/bin/$cross-readelf -S $build/bin/$bin | grep .text | \
+					xargs | cut -d ' ' -f 5`
+				echo "add-symbol-file $build/bin/$bin 0x$addr" >> $tmp
+			fi
+
+			# add dynamic libraries
+			if [ "$ASK_LINKTYPE" = "dynamic" ]; then
+				./tools/genshlibs4gdb.sh $build/bin/$bin $build/bin $crossdir/$cross/lib >> $tmp
+			fi
+		done
+		IFS=$oIFS
+
+		$gdb $first --command=$tmp
+		if [ "$ASK_TGTTYPE" = "x86" ]; then
+			pgrep qemu | xargs kill 2>/dev/null
+		fi
+		rm -f $tmp
+		;;
+
+	dis=*)
+		$crossdir/bin/$cross-objdump -SC $build/bin/$binary | less
+		;;
+
+	elf=*)
+		$crossdir/bin/$cross-readelf -aW $build/bin/$binary | c++filt | less
+		;;
+
+	constr=*)
+		./tools/listconstr.sh $crossdir $cross $build/bin/$binary
+		;;
+
+	nm=*)
+		$crossdir/bin/$cross-nm -SC $build/bin/$binary | sort | less
+		;;
+
+	nms=*)
+		$crossdir/bin/$cross-nm -SC --size-sort $build/bin/$binary | less
+		;;
+
+	straddr=*)
+		echo "Strings containing '$script' in $binary:"
+		# find base address of .rodata
+		base=`$crossdir/bin/$cross-readelf -S $build/bin/$binary | grep .rodata | \
+			xargs | cut -d ' ' -f 5`
+		# find section number of .rodata
+		section=`$crossdir/bin/$cross-readelf -S $build/bin/$binary | grep .rodata | \
+			sed -e 's/.*\[\s*\([[:digit:]]*\)\].*/\1/g'`
+		# grep for matching lines, prepare for better use of awk and finally add offset to base
+		$crossdir/bin/$cross-readelf -p $section $build/bin/$binary | grep $script | \
+			sed 's/^ *\[ *\([[:xdigit:]]*\)\] *\(.*\)$/0x\1 \2/' | \
+			awk '{ printf("0x%x: %s %s %s %s %s %s\n",0x'$base' + strtonum($1),$2,$3,$4,$5,$6,$7) }'
+		;;
+
+	list)
+		echo "Start of section .text:"
+		ls -1 $build/bin | grep -v '\.a$' | while read l; do
+			$crossdir/bin/$cross-readelf -S $build/bin/$l | \
+				grep "\.text " | awk "{ printf(\"%20s: %s\n\",\"$l\",\$5) }"
+		done
+		;;
+esac

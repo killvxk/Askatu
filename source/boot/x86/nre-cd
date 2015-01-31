@@ -1,0 +1,8 @@
+#!/bin/sh
+DIR=$HOME/nova/nre/nre/dist/imgs
+. boot/$ASK_TGTTYPE/images.sh
+create_cd $1/dist $1/cd.iso
+for i in askatu ramdisk fs; do
+	cp $1/bin/$i $DIR/askatu
+done
+cp $1/cd.iso $DIR/askatu/askatu.iso

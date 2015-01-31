@@ -1,0 +1,4 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCXXProg('sbin', target = 'e1000', source = env.Glob('*.cc'))

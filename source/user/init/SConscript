@@ -1,0 +1,8 @@
+# -*- Mode: Python -*-
+
+Import('env')
+
+src = [
+	env.Glob('*.cc'), env.Glob('*/*.cc'), env.Glob('arch/$TGT/*.cc'), env.Glob('arch/$TGTTYPE/*.cc')
+]
+env.AskatuCXXProg('bin', target = 'init', source = src, LIBS = ['usergroup'])

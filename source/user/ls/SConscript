@@ -1,0 +1,4 @@
+# -*- Mode: Python -*-
+
+Import('env')
+env.AskatuCXXProg('bin', target = 'ls', source = env.Glob('*.cc'), LIBS = ['usergroup'])

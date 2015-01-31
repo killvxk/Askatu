@@ -1,0 +1,6 @@
+# -*- Mode: Python -*-
+
+Import('env')
+myenv = env.Clone()
+myenv.Append(CPPPATH = '#kernel/include')
+myenv.AskatuCXXProg('sbin', target = 'pipe', source = myenv.Glob('*.cc'))

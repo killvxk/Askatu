@@ -1,0 +1,23 @@
+# -*- Mode: Python -*-
+
+Import('env')
+
+if env['TGTTYPE'] == 'x86':
+	myenv = env.Clone()
+
+	preproc = Builder(action = '$CROSSDIR/bin/$CROSS-cpp -P $CPPFLAGS $SOURCE $TARGET')
+	myenv.Append(BUILDERS = {'PreProc' : preproc})
+
+	ldconf = myenv.PreProc('ld-final.conf', 'ld.conf')
+
+	myenv.Append(
+		LINKFLAGS = ' -nostartfiles -Wl,-T,' + ldconf[0].abspath
+	)
+	#myenv.Append(CFLAGS = ' -DCALLTRACE_PID=0', ASFLAGS = ' -DCALLTRACE_PID=0')
+	prog = myenv.AskatuCProg(
+		'bin',
+		target = 'dynlink',
+		source = ['startup.S', myenv.Glob('arch/$TGT/lookup.S'), myenv.Glob('*.c')],
+		force_static = True, var_addr = False
+	)
+	myenv.Depends(prog, ldconf)

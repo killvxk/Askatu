@@ -1,0 +1,20 @@
+# -*- Mode: Python -*-
+
+Import('env')
+
+myenv = env.Clone()
+builddir = myenv.Dir('$BUILDDIR/lib/shell')
+myenv.Append(
+	CFLAGS = ' -DYYERROR_VERBOSE -I lib/shell -I ' + builddir.abspath,
+	CXXFLAGS = ' -I lib/shell -I ' + builddir.abspath,
+	LEXFLAGS = '--nounistd',
+	YACCFLAGS = '-t -d'
+)
+
+lexer = myenv.CFile(target = 'lex.c', source = 'script.l')
+parser = myenv.CFile(target = 'parser', source = 'script.y')
+
+ccfiles = [myenv.Glob('*.cc'), myenv.Glob('*/*.cc')]
+myenv.Depends(ccfiles, [lexer, parser])
+
+myenv.AskatuLib(target = 'shell', source = ccfiles + ['lang.c', lexer, parser[0]])
